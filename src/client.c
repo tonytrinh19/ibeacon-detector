@@ -1,150 +1,127 @@
-#include <dc_application/command_line.h>
-#include <dc_application/config.h>
-#include <dc_application/defaults.h>
-#include <dc_application/environment.h>
-#include <dc_application/options.h>
-#include <dc_posix/dc_stdlib.h>
+#include <dc_posix/dc_netdb.h>
+#include <dc_posix/dc_posix_env.h>
+#include <dc_posix/dc_unistd.h>
+#include <dc_posix/dc_signal.h>
 #include <dc_posix/dc_string.h>
-#include <getopt.h>
+#include <dc_posix/sys/dc_socket.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 
-struct application_settings
-{
-    struct dc_opt_settings opts;
-    struct dc_setting_string *message;
-};
-
-
-
-static struct dc_application_settings *create_settings(const struct dc_posix_env *env, struct dc_error *err);
-static int destroy_settings(const struct dc_posix_env *env,
-                            struct dc_error *err,
-                            struct dc_application_settings **psettings);
-static int run(const struct dc_posix_env *env, struct dc_error *err, struct dc_application_settings *settings);
 static void error_reporter(const struct dc_error *err);
-static void trace_reporter(const struct dc_posix_env *env,
-                           const char *file_name,
-                           const char *function_name,
-                           size_t line_number);
+
+static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
+                           const char *function_name, size_t line_number);
+
+static void quit_handler(int sig_num);
 
 
-int main(int argc, char *argv[])
-{
-    dc_posix_tracer tracer;
+static volatile sig_atomic_t exit_flag;
+
+
+int main(void) {
     dc_error_reporter reporter;
-    struct dc_posix_env env;
+    dc_posix_tracer tracer;
     struct dc_error err;
-    struct dc_application_info *info;
-    int ret_val;
+    struct dc_posix_env env;
+    const char *host_name;
+    struct addrinfo hints;
+    struct addrinfo *result;
 
     reporter = error_reporter;
     tracer = trace_reporter;
     tracer = NULL;
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
-    info = dc_application_info_create(&env, &err, "Settings Application");
-    ret_val = dc_application_run(&env, &err, info, create_settings, destroy_settings, run, dc_default_create_lifecycle, dc_default_destroy_lifecycle, NULL, argc, argv);
-    dc_application_info_destroy(&env, &info);
-    dc_error_reset(&err);
 
-    return ret_val;
-}
+    host_name = "192.168.64.5";
+    dc_memset(&env, &hints, 0, sizeof(hints));
+    hints.ai_family = PF_INET; // PF_INET6;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    dc_getaddrinfo(&env, &err, host_name, NULL, &hints, &result);
 
-static struct dc_application_settings *create_settings(const struct dc_posix_env *env, struct dc_error *err)
-{
-    struct application_settings *settings;
+    if (dc_error_has_no_error(&err)) {
+        int socket_fd;
 
-    DC_TRACE(env);
-    settings = dc_malloc(env, err, sizeof(struct application_settings));
+        socket_fd = dc_socket(&env, &err, result->ai_family, result->ai_socktype, result->ai_protocol);
 
-    if(settings == NULL)
-    {
-        return NULL;
+        if (dc_error_has_no_error(&err)) {
+            struct sockaddr *sockaddr;
+            in_port_t port;
+            in_port_t converted_port;
+            socklen_t sockaddr_size;
+
+            sockaddr = result->ai_addr;
+            port = 1234;
+            converted_port = htons(port);
+
+            if (sockaddr->sa_family == AF_INET) {
+                struct sockaddr_in *addr_in;
+
+                addr_in = (struct sockaddr_in *) sockaddr;
+                addr_in->sin_port = converted_port;
+                sockaddr_size = sizeof(struct sockaddr_in);
+            } else {
+                if (sockaddr->sa_family == AF_INET6) {
+                    struct sockaddr_in6 *addr_in;
+
+                    addr_in = (struct sockaddr_in6 *) sockaddr;
+                    addr_in->sin6_port = converted_port;
+                    sockaddr_size = sizeof(struct sockaddr_in6);
+                } else {
+                    DC_ERROR_RAISE_USER(&err, "sockaddr->sa_family is invalid", -1);
+                    sockaddr_size = 0;
+                }
+            }
+
+            if (dc_error_has_no_error(&err)) {
+                dc_connect(&env, &err, socket_fd, sockaddr, sockaddr_size);
+
+                if (dc_error_has_no_error(&err)) {
+                    struct sigaction old_action;
+
+                    dc_sigaction(&env, &err, SIGINT, NULL, &old_action);
+
+                    if (old_action.sa_handler != SIG_IGN) {
+                        struct sigaction new_action;
+                        char data[1024] = {0};
+
+                        exit_flag = 0;
+                        new_action.sa_handler = quit_handler;
+                        sigemptyset(&new_action.sa_mask);
+                        new_action.sa_flags = 0;
+                        dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
+                        while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
+                            dc_write(&env, &err, socket_fd, data, strlen(data));
+                            printf("READ %s\n", data);
+                            memset(data, '\0', strlen(data));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (dc_error_has_no_error(&err)) {
+            dc_close(&env, &err, socket_fd);
+        }
     }
-
-    settings->opts.parent.config_path = dc_setting_path_create(env, err);
-    settings->message = dc_setting_string_create(env, err);
-
-    struct options opts[] = {
-            {(struct dc_setting *)settings->opts.parent.config_path,
-                    dc_options_set_path,
-                    "config",
-                    required_argument,
-                    'c',
-                    "CONFIG",
-                    dc_string_from_string,
-                    NULL,
-                    dc_string_from_config,
-                    NULL},
-            {(struct dc_setting *)settings->message,
-                    dc_options_set_string,
-                    "message",
-                    required_argument,
-                    'm',
-                    "MESSAGE",
-                    dc_string_from_string,
-                    "message",
-                    dc_string_from_config,
-                    "Hello, Default World!"},
-    };
-
-    // note the trick here - we use calloc and add 1 to ensure the last line is all 0/NULL
-    settings->opts.opts_count = (sizeof(opts) / sizeof(struct options)) + 1;
-    settings->opts.opts_size = sizeof(struct options);
-    settings->opts.opts = dc_calloc(env, err, settings->opts.opts_count, settings->opts.opts_size);
-    dc_memcpy(env, settings->opts.opts, opts, sizeof(opts));
-    settings->opts.flags = "m:";
-    settings->opts.env_prefix = "DC_EXAMPLE_";
-
-    return (struct dc_application_settings *)settings;
-}
-
-static int destroy_settings(const struct dc_posix_env *env,
-                            __attribute__((unused)) struct dc_error *err,
-                            struct dc_application_settings **psettings)
-{
-    struct application_settings *app_settings;
-
-    DC_TRACE(env);
-    app_settings = (struct application_settings *)*psettings;
-    dc_setting_string_destroy(env, &app_settings->message);
-    dc_free(env, app_settings->opts.opts, app_settings->opts.opts_count);
-    dc_free(env, *psettings, sizeof(struct application_settings));
-
-    if(env->null_free)
-    {
-        *psettings = NULL;
-    }
-
-    return 0;
-}
-
-static int run(const struct dc_posix_env *env, struct dc_error *err, struct dc_application_settings *settings)
-{
-    struct application_settings *app_settings;
-    const char *message;
-
-    DC_TRACE(env);
-
-    app_settings = (struct application_settings *)settings;
-    message = dc_setting_string_get(env, app_settings->message);
-    printf("client says \"%s\"\n", message);
 
     return EXIT_SUCCESS;
 }
 
-static void error_reporter(const struct dc_error *err)
-{
-    fprintf(stderr, "ERROR: %s : %s : @ %zu : %d\n", err->file_name, err->function_name, err->line_number, 0);
-    fprintf(stderr, "ERROR: %s\n", err->message);
+static void quit_handler(int sig_num) {
+    exit_flag = 1;
 }
 
-static void trace_reporter(__attribute__((unused)) const struct dc_posix_env *env,
-                           const char *file_name,
-                           const char *function_name,
-                           size_t line_number)
-{
-    fprintf(stdout, "TRACE: %s : %s : @ %zu\n", file_name, function_name, line_number);
+static void error_reporter(const struct dc_error *err) {
+    fprintf(stderr, "Error: \"%s\" - %s : %s : %d @ %zu\n", err->message, err->file_name, err->function_name,
+            err->errno_code, err->line_number);
+}
+
+static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
+                           const char *function_name, size_t line_number) {
+    fprintf(stderr, "Entering: %s : %s @ %zu\n", file_name, function_name, line_number);
 }

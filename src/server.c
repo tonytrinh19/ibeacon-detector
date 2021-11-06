@@ -36,7 +36,7 @@ int main(void)
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "localhost";
+    host_name = "127.0.0.1";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family =  PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
