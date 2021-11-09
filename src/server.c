@@ -130,26 +130,28 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
 
-        DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-        if (dc_error_has_no_error(err)) {
-            store(env, err, db, "TESTING FIRST", "value bro bro", DBM_REPLACE);
-            if (dc_error_has_error(err)) {
-                if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR) {
-                    dc_error_reset(err);
-                }
-            } else {
-                datum content;
-                content = fetch(env, err, db, "TESTING FIRST");
-                //content = fetch(&env, &err, db, "Foo");
-//                display("TESTING FIRST", &content);
-            }
-        }
-        dc_dbm_close(env, err, db);
-        printf("END OF CONNECTION\n");
-
-
+        store_data(env, err, data);
         dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
+        memset(data, '\0', strlen(data));
     }
     dc_free(env, data, size);
+}
+
+void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
+    DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+    if (dc_error_has_no_error(err)) {
+        store(env, err, db, data, "value bro bro", DBM_REPLACE);
+        if (dc_error_has_error(err)) {
+            if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR) {
+                dc_error_reset(err);
+            }
+        } else {
+            datum content;
+            content = fetch(env, err, db, data);
+            //content = fetch(&env, &err, db, "Foo");
+            display(data, &content);
+        }
+    }
+    dc_dbm_close(env, err, db);
 }
 
