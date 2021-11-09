@@ -47,7 +47,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1237;
+            port = 8080;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -97,6 +97,7 @@ int main(void) {
                                 client_socket_fd = dc_accept(&env, &err, server_socket_fd, NULL, NULL);
 
                                 if (dc_error_has_no_error(&err)) {
+                                    // Receives data from client
                                     receive_data(&env, &err, client_socket_fd, 1024);
                                     dc_close(&env, &err, client_socket_fd);
                                 } else {
@@ -131,7 +132,12 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
 
         store_data(env, err, data);
+
         dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
+        // Test, write the data back to the client. fd = client's fd
+        char test_data[5] = "value";
+        dc_write(env, err, fd, test_data, strlen(test_data));
+
         memset(data, '\0', strlen(data));
     }
     dc_free(env, data, size);

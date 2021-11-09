@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include "common.h"
 
+void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
+
 int main(void) {
     dc_error_reporter reporter;
     dc_posix_tracer tracer;
@@ -44,7 +46,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1237;
+            port = 8080;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -83,11 +85,18 @@ int main(void) {
                         sigemptyset(&new_action.sa_mask);
                         new_action.sa_flags = 0;
                         dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
-                        while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
+
+                        while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 &&
+                               dc_error_has_no_error(&err)) {
+                            // writes to the socket
                             dc_write(&env, &err, socket_fd, data, strlen(data));
-                            printf("READ %s\n", data);
+                            printf("GET key:%s\n", data);
+                            // Receives data from server
+                            receive_data(&env, &err, socket_fd, 1024);
                             memset(data, '\0', strlen(data));
                         }
+
+
                     }
                 }
             }
@@ -99,4 +108,23 @@ int main(void) {
     }
 
     return EXIT_SUCCESS;
+}
+
+
+// Look at the code in the client, you could do the same thing
+void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size) {
+    // more efficient would be to allocate the buffer in the caller (main) so we don't have to keep
+    // mallocing and freeing the same data over and over again.
+    char *data;
+    ssize_t count;
+
+    data = dc_malloc(env, err, size);
+
+    if (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
+        //Receiving data from the server and write it on client's terminal
+        dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
+//        dc_write(env, err, fd, data, strlen(data));
+//        memset(data, '\0', strlen(data));
+    }
+    dc_free(env, data, size);
 }
