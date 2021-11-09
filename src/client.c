@@ -8,18 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-
-static void error_reporter(const struct dc_error *err);
-
-static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
-                           const char *function_name, size_t line_number);
-
-static void quit_handler(int sig_num);
-
-
-static volatile sig_atomic_t exit_flag;
-
+#include "common.h"
 
 int main(void) {
     dc_error_reporter reporter;
@@ -36,7 +25,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "192.168.64.5";
+    host_name = "localhost";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -55,7 +44,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1234;
+            port = 1237;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -110,18 +99,4 @@ int main(void) {
     }
 
     return EXIT_SUCCESS;
-}
-
-static void quit_handler(int sig_num) {
-    exit_flag = 1;
-}
-
-static void error_reporter(const struct dc_error *err) {
-    fprintf(stderr, "Error: \"%s\" - %s : %s : %d @ %zu\n", err->message, err->file_name, err->function_name,
-            err->errno_code, err->line_number);
-}
-
-static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
-                           const char *function_name, size_t line_number) {
-    fprintf(stderr, "Entering: %s : %s @ %zu\n", file_name, function_name, line_number);
 }

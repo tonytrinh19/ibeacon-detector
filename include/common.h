@@ -1,29 +1,32 @@
 #ifndef MORSE_COMMON_H
 #define MORSE_COMMON_H
+#include <dc_posix/dc_netdb.h>
+#include <dc_posix/dc_posix_env.h>
+#include <dc_posix/dc_unistd.h>
+#include <dc_posix/dc_signal.h>
+#include <dc_posix/dc_string.h>
+#include <dc_posix/dc_stdlib.h>
+#include <dc_posix/sys/dc_socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-/*
- * This file is part of dc_dump.
- *
- *  dc_dump is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  Foobar is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with dc_dump.  If not, see <https://www.gnu.org/licenses/>.
- */
+#include <dc_posix/dc_netdb.h>
+#include <dc_posix/dc_posix_env.h>
+#include <dc_posix/dc_unistd.h>
+#include <dc_posix/dc_signal.h>
+#include <dc_posix/dc_string.h>
+#include <dc_posix/sys/dc_socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-/**
- * A function to be documented.
- *
- * @param str a parameter to be documented.
- * @return a return value to be documented.
- */
-int display(const char *str);
+static volatile sig_atomic_t exit_flag;
 
-#endif // TEMPLATE_COMMON_H
+void error_reporter(const struct dc_error *err);
+
+void trace_reporter(const struct dc_posix_env *env, const char *file_name,
+                           const char *function_name, size_t line_number);
+void quit_handler(int sig_num);
+#endif // MORSE_COMMON_H

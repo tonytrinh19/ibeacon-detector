@@ -1,24 +1,4 @@
-#include <dc_posix/dc_netdb.h>
-#include <dc_posix/dc_posix_env.h>
-#include <dc_posix/dc_unistd.h>
-#include <dc_posix/dc_signal.h>
-#include <dc_posix/dc_string.h>
-#include <dc_posix/dc_stdlib.h>
-#include <dc_posix/sys/dc_socket.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-
-static void error_reporter(const struct dc_error *err);
-static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
-                           const char *function_name, size_t line_number);
-static void quit_handler(int sig_num);
-void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
-
-
-static volatile sig_atomic_t exit_flag;
-
+#include "server.h"
 
 int main(void)
 {
@@ -36,7 +16,7 @@ int main(void)
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "127.0.0.1";
+    host_name = "localhost";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family =  PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -57,7 +37,7 @@ int main(void)
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1234;
+            port = 1237;
             converted_port = htons(port);
 
             if(sockaddr->sa_family == AF_INET)
@@ -111,7 +91,6 @@ int main(void)
                             sigemptyset(&new_action.sa_mask);
                             new_action.sa_flags = 0;
                             dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
-
                             while(!(exit_flag) && dc_error_has_no_error(&err))
                             {
                                 int client_socket_fd;
@@ -164,18 +143,3 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
     dc_free(env, data, size);
 }
 
-static void quit_handler(int sig_num)
-{
-    exit_flag = 1;
-}
-
-static void error_reporter(const struct dc_error *err)
-{
-    fprintf(stderr, "Error: \"%s\" - %s : %s : %d @ %zu\n", err->message, err->file_name, err->function_name, err->errno_code, err->line_number);
-}
-
-static void trace_reporter(const struct dc_posix_env *env, const char *file_name,
-                           const char *function_name, size_t line_number)
-{
-    fprintf(stderr, "Entering: %s : %s @ %zu\n", file_name, function_name, line_number);
-}

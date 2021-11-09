@@ -1,26 +1,16 @@
-/*
- * This file is part of dc_dump.
- *
- *  dc_dump is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  Foobar is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with dc_dump.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 #include "common.h"
-#include <stdio.h>
 
-int display(const char *str)
+void error_reporter(const struct dc_error *err) {
+    fprintf(stderr, "Error: \"%s\" - %s : %s : %d @ %zu\n", err->message, err->file_name, err->function_name,
+            err->errno_code, err->line_number);
+}
+
+void trace_reporter(const struct dc_posix_env *env, const char *file_name,
+                           const char *function_name, size_t line_number) {
+    fprintf(stderr, "Entering: %s : %s @ %zu\n", file_name, function_name, line_number);
+}
+
+void quit_handler(int sig_num)
 {
-    printf("%s\n", str);
-
-    return 0;
+    exit_flag = 1;
 }
