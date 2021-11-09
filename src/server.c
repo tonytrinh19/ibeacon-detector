@@ -1,4 +1,14 @@
+#include <dc_posix/dc_netdb.h>
+#include <dc_posix/dc_posix_env.h>
+#include <dc_posix/dc_unistd.h>
+#include <dc_posix/dc_signal.h>
+#include <dc_posix/dc_string.h>
+#include <dc_posix/dc_stdlib.h>
+#include <dc_posix/sys/dc_socket.h>
+#include <stdio.h>
+#include <unistd.h>
 #include "server.h"
+#include "common.h"
 
 int main(void)
 {
