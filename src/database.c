@@ -13,7 +13,7 @@ store(const struct dc_posix_env *env,
     int ret_val;
 
     datum key = {(void *) name, strlen(name) + 1};
-    datum value = {(void *) phone_number, sizeof(phone_number) + 1};
+    datum value = {(void *) phone_number, strlen(phone_number) + 1};
     dc_dbm_store(env, err, db, key, value, type);
 
     return ret_val;

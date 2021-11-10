@@ -46,7 +46,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 8080;
+            port = 8081;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -90,7 +90,7 @@ int main(void) {
                                dc_error_has_no_error(&err)) {
                             // writes to the socket
                             dc_write(&env, &err, socket_fd, data, strlen(data));
-                            printf("GET key:%s\n", data);
+                            // printf("GET key:%s\n", data);
                             // Receives data from server
                             receive_data(&env, &err, socket_fd, 1024);
                             memset(data, '\0', strlen(data));
