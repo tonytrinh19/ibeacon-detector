@@ -7,6 +7,7 @@
 #include <dc_posix/sys/dc_socket.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "server.h"
 #include "common.h"
 #include "database.h"
@@ -47,7 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1237;
+            port = 1232;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -130,8 +131,35 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
 
-        store_data(env, err, data);
-        dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
+        char *temp = malloc((strlen(data) + 1) * sizeof(char));
+        strcpy(temp, data);
+        temp[strlen(temp) - 1] = '\0';
+        int num_of_tokens = words(data);
+
+        char *token_array[num_of_tokens];
+
+        dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
+        char *rest = NULL;
+        char *token;
+        int index = 0;
+//        store_data(env, err, data);
+        for (token = strtok_r(temp, " ", &rest);
+             token != NULL;
+             token = strtok_r(NULL, " ", &rest)) {
+            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
+            strcpy(token_ed, token);
+            token_ed[sizeof(token_ed) - 1] = '\0';
+
+            if (token_ed[sizeof(token_ed) - 1] == '\0') {
+                token_array[index] = token_ed;
+                index++;
+            }
+        }
+
+        for (int i = 0; i < num_of_tokens; i++) {
+            printf("Token: %s\n", token_array[i]);
+        }
+        free(temp);
         memset(data, '\0', strlen(data));
     }
     dc_free(env, data, size);
@@ -140,7 +168,9 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
     DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
     if (dc_error_has_no_error(err)) {
+
         store(env, err, db, data, "value bro bro", DBM_REPLACE);
+
         if (dc_error_has_error(err)) {
             if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR) {
                 dc_error_reset(err);
@@ -155,3 +185,19 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
     dc_dbm_close(env, err, db);
 }
 
+
+int words(const char *sentence) {
+    int count = 0, i, len;
+    char lastC;
+    len = (int) strlen(sentence);
+    if (len > 0) {
+        lastC = sentence[0];
+    }
+    for (i = 0; i <= len; i++) {
+        if ((sentence[i] == ' ' || sentence[i] == '\0') && lastC != ' ') {
+            count++;
+        }
+        lastC = sentence[i];
+    }
+    return count;
+}

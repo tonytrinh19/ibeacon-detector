@@ -44,7 +44,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1237;
+            port = 1232;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -83,10 +83,12 @@ int main(void) {
                         sigemptyset(&new_action.sa_mask);
                         new_action.sa_flags = 0;
                         dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
+
                         while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
-                            dc_write(&env, &err, socket_fd, data, strlen(data));
+                            data[strlen(data)] = '\0';
                             printf("READ %s\n", data);
-                            memset(data, '\0', strlen(data));
+                            dc_write(&env, &err, socket_fd, data, strlen(data) + 1);
+                            memset(data, '\0', strlen(data) + 1);
                         }
                     }
                 }
