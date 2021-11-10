@@ -47,7 +47,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 8081;
+            port = 8083;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -146,9 +146,9 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
             temp = strtok(NULL, " ");
         }
 
-        for (int i = 0; i < 2; i++) {
-            printf("dataArray[%d] = %s\n", i ,dataArray[i]);
-        }
+//        for (int i = 0; i < 2; i++) {
+//            printf("dataArray[%d] = %s\n", i ,dataArray[i]);
+//        }
 
 
         if (strcmp(dataArray[0], "get") == 0) {
@@ -157,6 +157,18 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
             datum content = fetch(env, err, db, (char *)dataArray[1]);
 //            printf("%s\n", content.dptr);
             dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
+            dc_dbm_close(env, err, db);
+
+        }
+
+        if (strcmp(dataArray[0], "put") == 0) {
+            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+//            printf("This is dataArray[1] = %s\n", dataArray[1]);
+            datum content = fetch(env, err, db, (char *)dataArray[1]);
+//            printf("%s\n", content.dptr);
+            dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
+            dc_dbm_close(env, err, db);
+
         }
 
 
@@ -164,9 +176,9 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 //        char test_data[5] = "value";
 //        dc_write(env, err, fd, test_data, strlen(test_data));
 
-        memset(data, '\0', strlen(data));
+//        memset(data, '\0', strlen(data));
     }
-    //dc_free(env, data, size);
+    dc_free(env, data, size);
 }
 
 void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
@@ -194,4 +206,3 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
     }
     dc_dbm_close(env, err, db);
 }
-
