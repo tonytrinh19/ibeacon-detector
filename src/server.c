@@ -48,7 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1234;
+            port = 1111;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -161,9 +161,22 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
             printf("Token: %s\n", token_array[i]);
         }
 
+        char *reply =
+                "HTTP/1.1 200 BRUH\n"
+                "Date: Thu, 19 Feb 2009 12:27:04 GMT\n"
+                "Server: Apache/2.2.3\n"
+                "Last-Modified: Wed, 18 Jun 2003 16:05:58 GMT\n"
+                "ETag: \"56d-9989200-1132c580\"\n"
+                "Content-Type: text/html\n"
+                "Content-Length: 15\n"
+                "Accept-Ranges: bytes\n"
+                "Connection: close\n"
+                "\n"
+                "sdfkjsdnbfkjbsf";
         // Checks for token_array first element to determine which method is called
         if (strcmp(token_array[0], "GET") == 0) {
             printf("Do GET methods\n");
+            dc_send(env, err, fd, reply, strlen(reply), 0);
         } else if (strcmp(token_array[0], "PUT") == 0) {
             printf("Do PUT methods\n");
         }
