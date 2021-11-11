@@ -10,7 +10,9 @@
 #include <unistd.h>
 #include "common.h"
 
+
 void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
+
 
 int main(void) {
     dc_error_reporter reporter;
@@ -46,7 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 8083;
+            port = 1235;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -86,17 +88,13 @@ int main(void) {
                         new_action.sa_flags = 0;
                         dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
 
-                        while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 &&
-                               dc_error_has_no_error(&err)) {
-                            // writes to the socket
-                            dc_write(&env, &err, socket_fd, data, strlen(data));
-                            // printf("GET key:%s\n", data);
-                            // Receives data from server
+                        while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
+                            data[strlen(data)] = '\0';
+//                            printf("READ %s\n", data);
+                            dc_write(&env, &err, socket_fd, data, strlen(data) + 1);
                             receive_data(&env, &err, socket_fd, 1024);
-                            memset(data, '\0', strlen(data));
+                            memset(data, '\0', strlen(data) + 1);
                         }
-
-
                     }
                 }
             }

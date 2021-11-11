@@ -7,13 +7,12 @@
 #include <dc_posix/sys/dc_socket.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "server.h"
 #include "common.h"
 #include "database.h"
 
 #define testdb "TESTDB"
-
-#define DELIM_CHARS " "
 
 int main(void) {
     dc_error_reporter reporter;
@@ -49,8 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-
-            port = 8083;
+            port = 1235;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -100,7 +98,6 @@ int main(void) {
                                 client_socket_fd = dc_accept(&env, &err, server_socket_fd, NULL, NULL);
 
                                 if (dc_error_has_no_error(&err)) {
-                                    // Receives data from client
                                     receive_data(&env, &err, client_socket_fd, 1024);
                                     dc_close(&env, &err, client_socket_fd);
                                 } else {
@@ -129,57 +126,78 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
     // mallocing and freeing the same data over and over again.
     char *data;
     ssize_t count;
+
     data = dc_malloc(env, err, size);
 
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
-        char dest[sizeof(char) * size];
 
-        strncpy(dest, data, sizeof(dest));
-        store_data(env, err, data);
-
-
-        dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
-
-        char* dataArray[3] = { NULL,}; // [put(get), key, value]
-        int i = 0;
-        char *temp = strtok(dest," ");
-        while (temp != NULL) {
-            dataArray[i] = temp;
-            i++;
-            temp = strtok(NULL, " ");
-        }
-
-//        for (int i = 0; i < 2; i++) {
-//            printf("dataArray[%d] = %s\n", i ,dataArray[i]);
+//        char *temp = malloc((strlen(data) + 1) * sizeof(char));
+//        strcpy(temp, data);
+//        temp[strlen(temp) - 1] = '\0';
+//        int num_of_tokens = words(data);
+//
+//        char *token_array[num_of_tokens];
+//
+//        dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
+//        char *rest = NULL;
+//        char *token;
+//        int index = 0;
+//
+//
+//        //tokenize
+//        for (token = strtok_r(temp, " ", &rest);
+//            token != NULL;
+//            token = strtok_r(NULL, " ", &rest)) {
+//            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
+//            strcpy(token_ed, token);
+//            token_ed[sizeof(token_ed) - 1] = '\0';
+//
+//            if (token_ed[sizeof(token_ed) - 1] == '\0') {
+//                token_array[index] = token_ed;
+//                index++;
+//            }
 //        }
 
 
-        if (strcmp(dataArray[0], "get") == 0) {
-            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-//            printf("This is dataArray[1] = %s\n", dataArray[1]);
-            datum content = fetch(env, err, db, (char *)dataArray[1]);
-//            printf("%s\n", content.dptr);
-            dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
-            dc_dbm_close(env, err, db);
+        char *temp = malloc(strlen(data) * sizeof(char));
+        strcpy(temp, data);
+        temp[strlen(temp) - 1] = '\0';
 
-        }
+        int num_of_tokens = words(data);
+        char *token_array[num_of_tokens];
 
-        if (strcmp(dataArray[0], "put") == 0) {
-            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-//            printf("This is dataArray[1] = %s\n", dataArray[1]);
-            datum content = fetch(env, err, db, (char *)dataArray[1]);
-//            printf("%s\n", content.dptr);
-            dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
-            dc_dbm_close(env, err, db);
-
+        char *ret_ptr;
+        char *next_ptr;
+        int i = 0;
+        ret_ptr = strtok_r(temp, " ", &next_ptr);
+        while(ret_ptr) {
+            token_array[i] = ret_ptr;
+            ret_ptr = strtok_r(NULL, " ", &next_ptr);
+            i++;
         }
 
 
-        // Test, write the data back to the client. fd = client's fd
-//        char test_data[5] = "value";
-//        dc_write(env, err, fd, test_data, strlen(test_data));
+//        for (int i = 0; i < num_of_tokens; i++) {
+//            printf("Token: [%s]\n", token_array[i]);
+//        }
+//        free(temp);
+//        printf("token_array[0] = %s\n", token_array[0]);
+//
+        if (strcmp(token_array[0], "put") == 0) {
+            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+            store(env, err, db, token_array[1], token_array[2], DBM_REPLACE);
+            dc_write(env, err, fd, "\n", 1);
+            dc_dbm_close(env, err, db);
+        }
 
-//        memset(data, '\0', strlen(data));
+        else if (strcmp(token_array[0], "get") == 0) {
+            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+            datum content = fetch(env, err, db, (char *)token_array[1]);
+            dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
+            dc_write(env, err, fd, "\n", 1);
+            dc_dbm_close(env, err, db);
+        }
+        memset(data, '\0', strlen(data) + 1);
     }
     dc_free(env, data, size);
 }
@@ -188,24 +206,35 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
     DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
     if (dc_error_has_no_error(err)) {
 
-        char* dataArray[3] = { NULL,}; // [put(get), major, minor, gps, timestamp]
-        int i = 0;
-        char *temp = strtok(data," ");
-        while (temp != NULL) {
-            dataArray[i] = temp;
-            i++;
-            temp = strtok(NULL, " ");
+        store(env, err, db, data, "value bro bro", DBM_REPLACE);
+
+        if (dc_error_has_error(err)) {
+            if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR) {
+                dc_error_reset(err);
+            }
+        } else {
+            datum content;
+            content = fetch(env, err, db, data);
+            //content = fetch(&env, &err, db, "Foo");
+            display(data, &content);
         }
-
-
-        if (strcmp(dataArray[0], "put") == 0) {
-            store(env, err, db, dataArray[1], dataArray[2], DBM_REPLACE);
-        }
-
-//        if (strcmp(dataArray[0], "get") == 0) {
-//            datum content = fetch(env, err, db, dataArray[1]);
-//            display("%s\n", content.dptr);
-//        }
     }
     dc_dbm_close(env, err, db);
+}
+
+
+int words(const char *sentence) {
+    int count = 0, i, len;
+    char lastC;
+    len = (int) strlen(sentence);
+    if (len > 0) {
+        lastC = sentence[0];
+    }
+    for (i = 0; i <= len; i++) {
+        if ((sentence[i] == ' ' || sentence[i] == '\0') && lastC != ' ') {
+            count++;
+        }
+        lastC = sentence[i];
+    }
+    return count;
 }
