@@ -181,7 +181,10 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
             printf("Do PUT methods\n");
         }
 
-
+        for (unsigned long i = 0; i < num_of_tokens; i++) {
+            free(token_array[i]);
+        }
+        free(token_array);
         free(temp);
         memset(data, '\0', strlen(data));
     }
