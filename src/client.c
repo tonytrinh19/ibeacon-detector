@@ -25,7 +25,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "localhost";
+    host_name = "10.0.0.168";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -44,7 +44,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1232;
+            port = 1235;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {

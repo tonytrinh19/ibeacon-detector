@@ -29,7 +29,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "localhost";
+    host_name = "10.0.0.168";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -48,7 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1232;
+            port = 1234;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -134,31 +134,41 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
         char *temp = malloc((strlen(data) + 1) * sizeof(char));
         strcpy(temp, data);
         temp[strlen(temp) - 1] = '\0';
-        int num_of_tokens = words(data);
+        unsigned long num_of_tokens = words(temp);
 
-        char *token_array[num_of_tokens];
+        char **token_array;
 
         dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
         char *rest = NULL;
         char *token;
         int index = 0;
 //        store_data(env, err, data);
+        token_array = malloc(num_of_tokens * sizeof(char *));
         for (token = strtok_r(temp, " ", &rest);
              token != NULL;
              token = strtok_r(NULL, " ", &rest)) {
-            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
+            char *token_ed = malloc((strlen(token) + 1) * sizeof(char));
             strcpy(token_ed, token);
-            token_ed[sizeof(token_ed) - 1] = '\0';
+            token_ed[strlen(token_ed)] = '\0';
 
-            if (token_ed[sizeof(token_ed) - 1] == '\0') {
-                token_array[index] = token_ed;
-                index++;
-            }
+            token_array[index] = malloc(strlen(token_ed) * sizeof(char));
+            token_array[index] = token_ed;
+            index++;
+
         }
 
-        for (int i = 0; i < num_of_tokens; i++) {
+        for (unsigned long i = 0; i < num_of_tokens; i++) {
             printf("Token: %s\n", token_array[i]);
         }
+
+        // Checks for token_array first element to determine which method is called
+        if (strcmp(token_array[0], "GET") == 0) {
+            printf("Do GET methods\n");
+        } else if (strcmp(token_array[0], "PUT") == 0) {
+            printf("Do PUT methods\n");
+        }
+
+
         free(temp);
         memset(data, '\0', strlen(data));
     }
@@ -186,10 +196,10 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
 }
 
 
-int words(const char *sentence) {
-    int count = 0, i, len;
+unsigned long words(const char *sentence) {
+    unsigned long len, i, count = 0;
     char lastC;
-    len = (int) strlen(sentence);
+    len = strlen(sentence);
     if (len > 0) {
         lastC = sentence[0];
     }
