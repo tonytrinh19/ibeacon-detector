@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ncurses.h>
 #include "common.h"
 
 
@@ -48,7 +49,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1235;
+            port = 8003;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -87,6 +88,7 @@ int main(void) {
                         sigemptyset(&new_action.sa_mask);
                         new_action.sa_flags = 0;
                         dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
+
 
                         while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
                             data[strlen(data)] = '\0';

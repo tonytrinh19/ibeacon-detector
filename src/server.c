@@ -36,6 +36,7 @@ int main(void) {
     hints.ai_flags = AI_CANONNAME;
     dc_getaddrinfo(&env, &err, host_name, NULL, &hints, &result);
 
+
     if (dc_error_has_no_error(&err)) {
         int server_socket_fd;
 
@@ -48,7 +49,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1235;
+            port = 8003;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -98,6 +99,10 @@ int main(void) {
                                 client_socket_fd = dc_accept(&env, &err, server_socket_fd, NULL, NULL);
 
                                 if (dc_error_has_no_error(&err)) {
+//                                    initscr();			/* Start curses mode 		  */
+//                                    start_color();
+//                                    init_pair(1, COLOR_WHITE, COLOR_BLUE);
+//                                    start_color();
                                     receive_data(&env, &err, client_socket_fd, 1024);
                                     dc_close(&env, &err, client_socket_fd);
                                 } else {
@@ -131,34 +136,7 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
 
-//        char *temp = malloc((strlen(data) + 1) * sizeof(char));
-//        strcpy(temp, data);
-//        temp[strlen(temp) - 1] = '\0';
-//        int num_of_tokens = words(data);
-//
-//        char *token_array[num_of_tokens];
-//
-//        dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
-//        char *rest = NULL;
-//        char *token;
-//        int index = 0;
-//
-//
-//        //tokenize
-//        for (token = strtok_r(temp, " ", &rest);
-//            token != NULL;
-//            token = strtok_r(NULL, " ", &rest)) {
-//            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
-//            strcpy(token_ed, token);
-//            token_ed[sizeof(token_ed) - 1] = '\0';
-//
-//            if (token_ed[sizeof(token_ed) - 1] == '\0') {
-//                token_array[index] = token_ed;
-//                index++;
-//            }
-//        }
-
-
+        // tokenize
         char *temp = malloc(strlen(data) * sizeof(char));
         strcpy(temp, data);
         temp[strlen(temp) - 1] = '\0';
@@ -180,21 +158,33 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 //        for (int i = 0; i < num_of_tokens; i++) {
 //            printf("Token: [%s]\n", token_array[i]);
 //        }
-//        free(temp);
+
+        dc_free(env, temp, strlen(data) * sizeof(char));
 //        printf("token_array[0] = %s\n", token_array[0]);
-//
+
         if (strcmp(token_array[0], "put") == 0) {
             DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
             store(env, err, db, token_array[1], token_array[2], DBM_REPLACE);
-            dc_write(env, err, fd, "\n", 1);
+            dc_write(env, err, fd, "Saved in DB successfully\n", 25);
             dc_dbm_close(env, err, db);
         }
 
         else if (strcmp(token_array[0], "get") == 0) {
             DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
             datum content = fetch(env, err, db, (char *)token_array[1]);
-            dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
-            dc_write(env, err, fd, "\n", 1);
+//            printf("Before checking content.dsize\n");
+            if (content.dsize <= 0) {
+                printf("Not in db\n");
+                dc_write(env, err, fd, "This is not in DB\n", 18);
+                dc_write(env, err, fd, "\n", 1);
+                memset(data, '\0', strlen(data) + 1);
+            }
+            else {
+                dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
+                dc_write(env, err, fd, "\n", 1);
+//                dc_write(env, err, STDOUT_FILENO, (char*)content.dptr, strlen((char*)content.dptr));
+//                dc_write(env, err, STDOUT_FILENO, "\n", 1);
+            }
             dc_dbm_close(env, err, db);
         }
         memset(data, '\0', strlen(data) + 1);
