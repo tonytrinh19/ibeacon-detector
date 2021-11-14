@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <ncurses.h>
 #include "server.h"
 #include "common.h"
 #include "database.h"
@@ -29,7 +30,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "10.0.0.168";
+    host_name = "localhost";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -48,7 +49,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1111;
+            port = 3333;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -134,59 +135,87 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
         char *temp = malloc((strlen(data) + 1) * sizeof(char));
         strcpy(temp, data);
         temp[strlen(temp) - 1] = '\0';
-        unsigned long num_of_tokens = words(temp);
+        int num_of_tokens = words(data);
 
-        char **token_array;
+        char *token_array[num_of_tokens];
 
         dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
         char *rest = NULL;
         char *token;
         int index = 0;
-//        store_data(env, err, data);
-        token_array = malloc(num_of_tokens * sizeof(char *));
+
+
+        //tokenize
         for (token = strtok_r(temp, " ", &rest);
              token != NULL;
              token = strtok_r(NULL, " ", &rest)) {
-            char *token_ed = malloc((strlen(token) + 1) * sizeof(char));
+            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
             strcpy(token_ed, token);
-            token_ed[strlen(token_ed)] = '\0';
+            token_ed[sizeof(token_ed) - 1] = '\0';
 
-            token_array[index] = malloc(strlen(token_ed) * sizeof(char));
-            token_array[index] = token_ed;
-            index++;
-
+            if (token_ed[sizeof(token_ed) - 1] == '\0') {
+                token_array[index] = token_ed;
+                index++;
+            }
         }
 
-        for (unsigned long i = 0; i < num_of_tokens; i++) {
-            printf("Token: %s\n", token_array[i]);
+
+//        char *temp = malloc(strlen(data) * sizeof(char));
+//        strcpy(temp, data);
+//        temp[strlen(temp) - 1] = '\0';
+//
+//        int num_of_tokens = words(data);
+//        char *token_array[num_of_tokens];
+//
+//        char *ret_ptr;
+//        char *next_ptr;
+//        int i = 0;
+//        ret_ptr = strtok_r(temp, " ", &next_ptr);
+//        while(ret_ptr) {
+//            token_array[i] = ret_ptr;
+//            ret_ptr = strtok_r(NULL, " ", &next_ptr);
+//            i++;
+//        }
+
+
+//        for (int i = 0; i < num_of_tokens; i++) {
+//            printf("Token: [%s]\n", token_array[i]);
+//        }
+//        free(temp);
+//        printf("token_array[0] = %s\n", token_array[0]);
+//
+        if (strcmp(token_array[0], "put") == 0) {
+            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+            store(env, err, db, token_array[1], token_array[2], DBM_REPLACE);
+            dc_write(env, err, fd, "Saved in DB successfully\n", 25);
+            dc_dbm_close(env, err, db);
         }
 
-        char *reply =
-                "HTTP/1.1 200 BRUH\n"
-                "Date: Thu, 19 Feb 2009 12:27:04 GMT\n"
-                "Server: Apache/2.2.3\n"
-                "Last-Modified: Wed, 18 Jun 2003 16:05:58 GMT\n"
-                "ETag: \"56d-9989200-1132c580\"\n"
-                "Content-Type: text/html\n"
-                "Content-Length: 15\n"
-                "Accept-Ranges: bytes\n"
-                "Connection: close\n"
-                "\n"
-                "sdfkjsdnbfkjbsf";
-        // Checks for token_array first element to determine which method is called
-        if (strcmp(token_array[0], "GET") == 0) {
-            printf("Do GET methods\n");
-            dc_send(env, err, fd, reply, strlen(reply), 0);
-        } else if (strcmp(token_array[0], "PUT") == 0) {
-            printf("Do PUT methods\n");
+        else if (strcmp(token_array[0], "get") == 0) {
+            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+            datum content = fetch(env, err, db, (char *)token_array[1]);
+            printf("Before checking content.dsize\n");
+            if (content.dsize <= 0) {
+                printf("Not in db\n");
+                dc_write(env, err, fd, "This is not in DB\n", 18);
+                memset(data, '\0', strlen(data) + 1);
+            }
+            else {
+//                printf("Before dc_write content.dptr in else\n");
+//                printf("After dc_write content.dptr in else\n");
+                initscr();			/* Start curses mode 		  */
+                printw("%s\n", (char *)content.dptr);	/* Print Hello World		  */
+                refresh();			/* Print it on to the real screen */
+                getch();			/* Wait for user input */
+                endwin();			/* End curses mode		  */
+                dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
+                dc_write(env, err, fd, "\n", 1);
+                dc_write(env, err, STDOUT_FILENO, (char*)content.dptr, strlen((char*)content.dptr));
+                dc_write(env, err, STDOUT_FILENO, "\n", 1);
+            }
+            dc_dbm_close(env, err, db);
         }
-
-        for (unsigned long i = 0; i < num_of_tokens; i++) {
-            free(token_array[i]);
-        }
-        free(token_array);
-        free(temp);
-        memset(data, '\0', strlen(data));
+        memset(data, '\0', strlen(data) + 1);
     }
     dc_free(env, data, size);
 }
@@ -210,6 +239,7 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
     }
     dc_dbm_close(env, err, db);
 }
+
 
 
 unsigned long words(const char *sentence) {

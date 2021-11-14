@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include "common.h"
 
+
+void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
+
+
 int main(void) {
     dc_error_reporter reporter;
     dc_posix_tracer tracer;
@@ -25,7 +29,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "10.0.0.168";
+    host_name = "localhost";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -44,7 +48,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 1111;
+            port = 3333;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -86,8 +90,9 @@ int main(void) {
 
                         while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
                             data[strlen(data)] = '\0';
-                            printf("READ %s\n", data);
+//                            printf("READ %s\n", data);
                             dc_write(&env, &err, socket_fd, data, strlen(data) + 1);
+                            receive_data(&env, &err, socket_fd, 1024);
                             memset(data, '\0', strlen(data) + 1);
                         }
                     }
@@ -101,4 +106,23 @@ int main(void) {
     }
 
     return EXIT_SUCCESS;
+}
+
+
+// Look at the code in the client, you could do the same thing
+void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size) {
+    // more efficient would be to allocate the buffer in the caller (main) so we don't have to keep
+    // mallocing and freeing the same data over and over again.
+    char *data;
+    ssize_t count;
+
+    data = dc_malloc(env, err, size);
+
+    if (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
+        //Receiving data from the server and write it on client's terminal
+        dc_write(env, err, STDOUT_FILENO, data, (size_t) count);
+//        dc_write(env, err, fd, data, strlen(data));
+//        memset(data, '\0', strlen(data));
+    }
+    dc_free(env, data, size);
 }
