@@ -9,9 +9,8 @@
 #include <string.h>
 #include <unistd.h>
 #include "common.h"
+#include "client.h"
 
-
-void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
 
 
 int main(void) {
@@ -48,7 +47,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 3333;
+            port = 5555;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {

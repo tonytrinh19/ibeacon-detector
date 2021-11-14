@@ -49,7 +49,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 3333;
+            port = 5555;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -134,8 +134,9 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 
         char *temp = malloc((strlen(data) + 1) * sizeof(char));
         strcpy(temp, data);
-        temp[strlen(temp) - 1] = '\0';
-        int num_of_tokens = words(data);
+        // should remove the -1
+        temp[strlen(temp)] = '\0';
+        unsigned long num_of_tokens = words(data);
 
         char *token_array[num_of_tokens];
 
@@ -149,11 +150,11 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
         for (token = strtok_r(temp, " ", &rest);
              token != NULL;
              token = strtok_r(NULL, " ", &rest)) {
-            char *token_ed = calloc((strlen(token) + 1), sizeof(char));
+            char *token_ed = malloc((strlen(token) + 1) * sizeof(char));
             strcpy(token_ed, token);
-            token_ed[sizeof(token_ed) - 1] = '\0';
+            token_ed[strlen(token_ed)] = '\0';
 
-            if (token_ed[sizeof(token_ed) - 1] == '\0') {
+            if (token_ed[strlen(token_ed)] == '\0') {
                 token_array[index] = token_ed;
                 index++;
             }
@@ -184,36 +185,44 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t
 //        free(temp);
 //        printf("token_array[0] = %s\n", token_array[0]);
 //
+
+        // Checks if the request is PUT
         if (strcmp(token_array[0], "put") == 0) {
             DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
+
             store(env, err, db, token_array[1], token_array[2], DBM_REPLACE);
+            printf("Saving item (%s, %s)\n", token_array[1], token_array[2]);
             dc_write(env, err, fd, "Saved in DB successfully\n", 25);
             dc_dbm_close(env, err, db);
         }
 
+
+        // Checks if the request is GET
         else if (strcmp(token_array[0], "get") == 0) {
             DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
             datum content = fetch(env, err, db, (char *)token_array[1]);
-            printf("Before checking content.dsize\n");
             if (content.dsize <= 0) {
                 printf("Not in db\n");
                 dc_write(env, err, fd, "This is not in DB\n", 18);
                 memset(data, '\0', strlen(data) + 1);
             }
             else {
-//                printf("Before dc_write content.dptr in else\n");
-//                printf("After dc_write content.dptr in else\n");
-                initscr();			/* Start curses mode 		  */
-                printw("%s\n", (char *)content.dptr);	/* Print Hello World		  */
-                refresh();			/* Print it on to the real screen */
-                getch();			/* Wait for user input */
-                endwin();			/* End curses mode		  */
+//                initscr();			/* Start curses mode 		  */
+//                printw("%s\n", (char *)content.dptr);	/* Print Hello World		  */
+//                refresh();			/* Print it on to the real screen */
+//                getch();			/* Wait for user input */
+//                endwin();			/* End curses mode		  */
+
                 dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
                 dc_write(env, err, fd, "\n", 1);
                 dc_write(env, err, STDOUT_FILENO, (char*)content.dptr, strlen((char*)content.dptr));
                 dc_write(env, err, STDOUT_FILENO, "\n", 1);
             }
             dc_dbm_close(env, err, db);
+        }
+
+        for (int i = 0; i < num_of_tokens; ++i) {
+            printf("%s\n", token_array[i]);
         }
         memset(data, '\0', strlen(data) + 1);
     }
