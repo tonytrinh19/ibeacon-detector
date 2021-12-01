@@ -36,18 +36,18 @@ void getData(struct dc_posix_env *env,
              struct dc_error *err);
 
 void receive_data(struct dc_posix_env *env,
-                 struct dc_error *err,
-                 int *contentLength,
-                 char *response,
-                 int fd,
-                 size_t size);
+                  struct dc_error *err,
+                  int *contentLength,
+                  char *response,
+                  int fd,
+                  size_t size);
 
 void store_data(struct dc_posix_env *env,
                 struct dc_error *err,
                 char *majorMinor,
                 char *location);
 
-unsigned long getNumberOfDigits (int n);
+unsigned long getNumberOfDigits(int n);
 
 struct application_settings {
     struct dc_opt_settings opts;
@@ -59,6 +59,15 @@ struct application_settings {
     struct addrinfo *address;
     int server_socket_fd;
 };
+
+void open404Page(struct dc_posix_env *env,
+                 struct dc_error *err,
+                 char *response);
+
+void openPagePath(struct dc_posix_env *env,
+                  struct dc_error *err,
+                  int fd,
+                  char *response);
 
 struct dc_application_settings *create_settings(const struct dc_posix_env *env,
                                                 struct dc_error *err);

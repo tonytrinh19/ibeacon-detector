@@ -2,6 +2,8 @@
 #define DEFAULT_ECHO_PORT 2007
 #define INT_MIN 0
 #define INT_MAX 10000
+#define PATH_404 "../../404.html"
+#define PATH_INDEX "../../index.html"
 #define database "DB"
 #define ROOT "../.."
 int main(int argc, char *argv[])
@@ -314,32 +316,28 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLe
     // mallocing and freeing the same data over and over again.
     char *data;
     ssize_t count;
-
     data = dc_malloc(env, err, size);
-    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
-                             "Content-Type: text/html\r\n"
-                             "Content-Length: ";
-    char headerOKRest[]    = "\r\n"
-                             "\r\n";
-    char headerError[]     = "HTTP/1.0 404 Not Found\r\n"
-                             "Content-Type: text/html\r\n"
-                             "Content-Length: ";
-    char headerErrorRest[] = "\r\n"
-                             "\r\n";
-
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err))
     {
-        char *temp = malloc((strlen(data) + 1) * sizeof(char));
+        char *requestType;
+        char *path;
+        char *temp;
+        char fileContent[BUFSIZ] = {0};
+        char *content = NULL;
+        ssize_t nread;
+        char *filePath;
+        int fileD;
+        unsigned long numOfDigits;
+        char *contentLengthString;
+
+        temp = malloc((strlen(data) + 1) * sizeof(char));
         strcpy(temp, data);
         temp[strlen(temp)] = '\0';
         dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
-        char *requestType;
-        char *path;
+
         requestType = strtok(temp, " ");
         path        = strtok(NULL, " ");
-        ssize_t nread;
-        char fileContent[BUFSIZ] = {0};
-        char *content;
+
 
         if (dc_strcmp(env, requestType, "GET") == 0)
         {
@@ -347,56 +345,21 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLe
             if (strlen(path) > 1)
             {
                 // Allocates memory for the path, strlen of path + 2 for ".."(ROOT)
-                char *filePath = calloc((strlen(path) + 2),sizeof(char));
+                filePath = calloc((strlen(path) + 2),sizeof(char));
                 strcat(filePath, ROOT);
                 strcat(filePath, path);
                 filePath[strlen(filePath)] = '\0';
-                int fileD = open(filePath, DC_O_RDONLY, 0);
+                fileD = open(filePath, DC_O_RDONLY, 0);
                 printf("\nFD:%d\n", fileD);
                 // Found a file.
                 if(fileD != -1)
                 {
-                    nread                       = dc_read(env, err, fileD, fileContent, BUFSIZ);
-                    content                     = malloc(nread * sizeof(char));
-                    strncpy(content, fileContent, nread);
-                    content[strlen(content)] = '\0';
-                    *contentLength              = (int) nread;
-
-                    unsigned long numOfDigits   = getNumberOfDigits(*contentLength);
-                    char *contentLengthString   = calloc(numOfDigits, sizeof(char));
-                    sprintf(contentLengthString, "%d", *contentLength);
-
-                    strcat(response, headerOK);
-                    strcat(response, contentLengthString);
-                    strcat(response, headerOKRest);
-                    strcat(response, content);
-                    strcat(response, "\r\n\r\n");
-
-                    free(contentLengthString);
-                    dc_close(env, err, fileD);
+                    openPagePath(env, err, fileD, response);
                 }
                 // Couldn't locate file, returns 404.
                 else
                 {
-                    char errorPath[]            = "../../404.html";
-                    int errorFileDescriptor     = open(errorPath, DC_O_RDONLY, 0);
-                    nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
-                    content                     = malloc(nread * sizeof(char));
-                    strncpy(content, fileContent, nread);
-                    content[strlen(content)] = '\0';
-                    *contentLength              = (int) nread;
-
-                    unsigned long numOfDigits   = getNumberOfDigits(*contentLength);
-                    char *contentLengthString   = calloc(numOfDigits, sizeof(char));
-                    sprintf(contentLengthString, "%d", *contentLength);
-
-                    strcat(response, headerError);
-                    strcat(response, contentLengthString);
-                    strcat(response, headerErrorRest);
-                    strcat(response, content);
-                    strcat(response, "\r\n\r\n");
-                    free(contentLengthString);
-                    dc_close(env, err, errorFileDescriptor);
+                    open404Page(env, err, response);
                 }
                 free(content);
                 free(filePath);
@@ -466,4 +429,65 @@ unsigned long getNumberOfDigits (int n) {
     if (n < 0) return getNumberOfDigits ((n == INT_MIN) ? INT_MAX: -n);
     if (n < 10) return 1;
     return 1 + getNumberOfDigits (n / 10);
+}
+
+void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response) {
+    char headerError[]     = "HTTP/1.0 404 Not Found\r\n"
+                             "Content-Type: text/html\r\n"
+                             "Content-Length: ";
+    char headerErrorRest[] = "\r\n"
+                             "\r\n";
+    ssize_t nread;
+    char *content;
+    char fileContent[BUFSIZ] = {0};
+    unsigned long numOfDigits;
+    char *contentLengthString;
+    int errorFileDescriptor     = open(PATH_404, DC_O_RDONLY, 0);
+    nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
+    content                     = malloc(nread * sizeof(char));
+    strncpy(content, fileContent, nread);
+    content[strlen(content)] = '\0';
+
+    numOfDigits   = getNumberOfDigits((int) nread);
+    contentLengthString   = calloc(numOfDigits, sizeof(char));
+
+    sprintf(contentLengthString, "%d", (int) nread);
+
+    strcat(response, headerError);
+    strcat(response, contentLengthString);
+    strcat(response, headerErrorRest);
+    strcat(response, content);
+    strcat(response, "\r\n\r\n");
+    free(contentLengthString);
+    dc_close(env, err, errorFileDescriptor);
+}
+
+void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* response) {
+    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
+                             "Content-Type: text/html\r\n"
+                             "Content-Length: ";
+    char headerOKRest[]    = "\r\n"
+                             "\r\n";
+    ssize_t nread;
+    char *content;
+    char fileContent[BUFSIZ] = {0};
+    unsigned long numOfDigits;
+    char *contentLengthString;
+    nread                       = dc_read(env, err, fd, fileContent, BUFSIZ);
+    content                     = malloc(nread * sizeof(char));
+    strncpy(content, fileContent, nread);
+    content[strlen(content)] = '\0';
+
+    numOfDigits   = getNumberOfDigits((int) nread);
+    contentLengthString   = calloc(numOfDigits, sizeof(char));
+    sprintf(contentLengthString, "%d", (int) nread);
+
+    strcat(response, headerOK);
+    strcat(response, contentLengthString);
+    strcat(response, headerOKRest);
+    strcat(response, content);
+    strcat(response, "\r\n\r\n");
+
+    free(contentLengthString);
+    dc_close(env, err, fd);
 }
