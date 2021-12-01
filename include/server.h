@@ -33,25 +33,76 @@
 static volatile sig_atomic_t exit_signal = 0;
 
 /*
- * Different file types,
+ * Different file types, INDEX for default file,
+ * CREATED for PUT request, CUSTOM for custom
+ * GET request path.
  */
 enum file{INDEX, CREATED, CUSTOM};
 
 void getData(struct dc_posix_env *env,
              struct dc_error *err);
 
+/**
+ * Listens to the socket. Waiting for information
+ * coming in.
+ * @param env env variable
+ * @param err err variable
+ * @param response the response to send back
+ * @param fd client's file descriptor
+ * @param size size of the incoming data in bytes
+ */
 void receive_data(struct dc_posix_env *env,
                   struct dc_error *err,
                   char *response,
                   int fd,
                   size_t size);
 
+/**
+ * Stores the data in the database, given the
+ * key and value pair.
+ * @param env env variable
+ * @param err err variable
+ * @param majorMinor the key or the major and minor seperated by ","
+ * @param location the value or the location and GPS
+ */
 void store_data(struct dc_posix_env *env,
                 struct dc_error *err,
                 char *majorMinor,
                 char *location);
 
+/**
+ * Return the number of digits of a number. E.g 123 returns 3.
+ * @param n The integer to be checked
+ * @return number of digits
+ */
 unsigned long getNumberOfDigits(int n);
+
+/**
+ * Opens the 404 page if user is trying to
+ * access an unsupported URL.
+ * @param env env variable
+ * @param err err variable
+ * @param response the response to be sent
+ */
+void open404Page(struct dc_posix_env *env,
+                 struct dc_error *err,
+                 char *response);
+
+/**
+ * Attaches the appropriate html content to the message
+ * body of the response so that a page is rendered once
+ * the right URL is accessed.
+ * @param env env variable
+ * @param err err variable
+ * @param fd the file to read html from
+ * @param response the response to be sent
+ */
+void openPagePath(struct dc_posix_env *env,
+                  struct dc_error *err,
+                  int fd,
+                  char *response,
+                  enum file);
+
 
 struct application_settings {
     struct dc_opt_settings opts;
@@ -63,16 +114,6 @@ struct application_settings {
     struct addrinfo *address;
     int server_socket_fd;
 };
-
-void open404Page(struct dc_posix_env *env,
-                 struct dc_error *err,
-                 char *response);
-
-void openPagePath(struct dc_posix_env *env,
-                  struct dc_error *err,
-                  int fd,
-                  char *response,
-                  enum file);
 
 struct dc_application_settings *create_settings(const struct dc_posix_env *env,
                                                 struct dc_error *err);
