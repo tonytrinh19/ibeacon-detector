@@ -35,10 +35,10 @@ static volatile sig_atomic_t exit_signal = 0;
 void getData(struct dc_posix_env *env,
              struct dc_error *err);
 
-int receive_data(struct dc_posix_env *env,
+void receive_data(struct dc_posix_env *env,
                  struct dc_error *err,
                  int *contentLength,
-                 char **response,
+                 char *response,
                  int fd,
                  size_t size);
 
@@ -47,13 +47,9 @@ void store_data(struct dc_posix_env *env,
                 char *majorMinor,
                 char *location);
 
-int getNumberOfDigits (int n);
+unsigned long getNumberOfDigits (int n);
 
-
-
-
-
-        struct application_settings {
+struct application_settings {
     struct dc_opt_settings opts;
     struct dc_setting_bool *verbose;
     struct dc_setting_string *hostname;

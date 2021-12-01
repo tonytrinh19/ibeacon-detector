@@ -255,63 +255,15 @@ void do_setup(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc
 
 bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socket_fd, void *arg)
 {
-//    char getResponse[] = "HTTP/1.0 200 OK\r\n"
-//                         "Date: Monday, 24-Apr-95 12:04:12 GMT\r\n"
-//                         "Content-type: text/html\r\n"
-//                         "\r\n"
-//                         "<!Doctype html>"
-//                         "<html>"
-//                         "<head>"
-//                         "<title>GET request</title>"
-//                         "</head>"
-//                         "<body>"
-//                         "<div>"
-//                         "<h1>GET request</h1>"
-//                         "</div>"
-//                         "</body>"
-//                         "</html>\r\n\r\n";
-//
-//    char putResponse[] = "HTTP/1.0 200 OK\r\n"
-//                         "Date: Monday, 24-Apr-95 12:04:12 GMT\r\n"
-//                         "Content-type: text/html\r\n"
-//                         "\r\n"
-//                         "<!Doctype html>"
-//                         "<html>"
-//                         "<head>"
-//                         "<title>PUT request</title>"
-//                         "</head>"
-//                         "<body>"
-//                         "<div>"
-//                         "<h1>PUT request</h1>"
-//                         "</div>"
-//                         "</body>"
-//                         "</html>\r\n\r\n";
-//
-//    char errorResponse[] = "HTTP/1.0 200 OK\r\n"
-//                           "Content-type: text/html\r\n"
-//                           "\r\n"
-//                           "<!Doctype html>"
-//                           "<html>"
-//                           "<head>"
-//                           "<title>404 PAGE</title>"
-//                           "</head>"
-//                           "<body>"
-//                           "<div>"
-//                           "<h1>Sorry, page not found!</h1>"
-//                           "</div>"
-//                           "</body>"
-//                           "</html>\r\n\r\n";
-
     struct application_settings *app_settings;
     bool ret_val;
-
     DC_TRACE(env);
-    app_settings = arg;
-    ret_val = false;
+
+    app_settings      = arg;
+    ret_val           = false;
     int contentLength = 0;
     *client_socket_fd = dc_network_accept(env, err, app_settings->server_socket_fd);
 
-    char *response = NULL;
 
     if (dc_error_has_error(err))
     {
@@ -321,21 +273,10 @@ bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socke
         }
     } else
     {
-        // change codes.
-        int responseCode = receive_data(env, err, &contentLength, &response, *client_socket_fd, BUFSIZ);
+        char response[BUFSIZ] = {0};
+        receive_data(env, err, &contentLength, response, *client_socket_fd, BUFSIZ);
         // GET
-        if (responseCode == 0)
-        {
-            dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
-        }
-            // PUT
-        else if (responseCode == 1)
-        {
-            dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
-        } else
-        {
-            dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
-        }
+        dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
         dc_close(env, err, *client_socket_fd);
         exit_flag = 0;
     }
@@ -367,34 +308,35 @@ trace(__attribute__ ((unused)) const struct dc_posix_env *env, const char *file_
 }
 
 // Look at the code in the client, you could do the same thing
-int receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLength, char **response, int fd, size_t size)
+void receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLength, char *response, int fd, size_t size)
 {
     // more efficient would be to allocate the buffer in the caller (main) so we don't have to keep
     // mallocing and freeing the same data over and over again.
     char *data;
     ssize_t count;
-    int responseCode = -1;
 
     data = dc_malloc(env, err, size);
-    char headerOK[] = "HTTP/1.0 200 OK\r\n"
-                    "Content-Type: text/html\r\n"
-                    "Content-Length: \r\n"
-                    "\r\n";
-    char headerError[] = "HTTP/1.0 404 Not Found\r\n"
-                      "Content-Type: text/html\r\n"
-                      "Content-Length: \r\n"
-                      "\r\n";
+    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
+                             "Content-Type: text/html\r\n"
+                             "Content-Length: ";
+    char headerOKRest[]    = "\r\n"
+                             "\r\n";
+    char headerError[]     = "HTTP/1.0 404 Not Found\r\n"
+                             "Content-Type: text/html\r\n"
+                             "Content-Length: ";
+    char headerErrorRest[] = "\r\n"
+                             "\r\n";
+
     while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err))
     {
         char *temp = malloc((strlen(data) + 1) * sizeof(char));
-        int reqType = -1;
         strcpy(temp, data);
         temp[strlen(temp)] = '\0';
         dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
         char *requestType;
         char *path;
         requestType = strtok(temp, " ");
-        path = strtok(NULL, " ");
+        path        = strtok(NULL, " ");
         ssize_t nread;
         char fileContent[BUFSIZ] = {0};
         char *content;
@@ -404,49 +346,56 @@ int receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLen
             // Web browser, looks for file
             if (strlen(path) > 1)
             {
-                // Allocates memory for the file path, strlen of path + 2 for ".."(ROOT)
+                // Allocates memory for the path, strlen of path + 2 for ".."(ROOT)
                 char *filePath = calloc((strlen(path) + 2),sizeof(char));
                 strcat(filePath, ROOT);
                 strcat(filePath, path);
                 filePath[strlen(filePath)] = '\0';
-                printf("\nFile Path:%s\n", filePath);
                 int fileD = open(filePath, DC_O_RDONLY, 0);
                 printf("\nFD:%d\n", fileD);
                 // Found a file.
                 if(fileD != -1)
                 {
-                    responseCode = 0;
-                    nread        = dc_read(env, err, fileD, fileContent, BUFSIZ);
-                    content      = malloc(nread * sizeof(char));
+                    nread                       = dc_read(env, err, fileD, fileContent, BUFSIZ);
+                    content                     = malloc(nread * sizeof(char));
                     strncpy(content, fileContent, nread);
                     content[strlen(content)] = '\0';
                     *contentLength              = (int) nread;
 
-                    char *test = calloc(strlen(), sizeof(char));
+                    unsigned long numOfDigits   = getNumberOfDigits(*contentLength);
+                    char *contentLengthString   = calloc(numOfDigits, sizeof(char));
+                    sprintf(contentLengthString, "%d", *contentLength);
 
-                    *response                   = calloc(strlen(headerOK) + (unsigned long) (*contentLength) + 4, sizeof(char));
-                    strcat(*response, headerOK);
-                    strcat(*response, content);
-                    strcat(*response, "\r\n\r\n");
+                    strcat(response, headerOK);
+                    strcat(response, contentLengthString);
+                    strcat(response, headerOKRest);
+                    strcat(response, content);
+                    strcat(response, "\r\n\r\n");
 
-//                    printf("Content-Length:%zu\n%s\n", nread, content);
+                    free(contentLengthString);
                     dc_close(env, err, fileD);
                 }
                 // Couldn't locate file, returns 404.
                 else
                 {
-                    char errorPath[]        = "../../404.html";
-                    int errorFileDescriptor = open(errorPath, DC_O_RDONLY, 0);
-                    responseCode            = -1;
-                    nread                   = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
-                    content                 = malloc(nread * sizeof(char));
+                    char errorPath[]            = "../../404.html";
+                    int errorFileDescriptor     = open(errorPath, DC_O_RDONLY, 0);
+                    nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
+                    content                     = malloc(nread * sizeof(char));
                     strncpy(content, fileContent, nread);
                     content[strlen(content)] = '\0';
                     *contentLength              = (int) nread;
-                    *response = calloc(strlen(headerError) + (unsigned long) (*contentLength) + 4, sizeof(char));
-                    strcat(*response, headerError);
-                    strcat(*response, content);
-                    strcat(*response, "\r\n\r\n");
+
+                    unsigned long numOfDigits   = getNumberOfDigits(*contentLength);
+                    char *contentLengthString   = calloc(numOfDigits, sizeof(char));
+                    sprintf(contentLengthString, "%d", *contentLength);
+
+                    strcat(response, headerError);
+                    strcat(response, contentLengthString);
+                    strcat(response, headerErrorRest);
+                    strcat(response, content);
+                    strcat(response, "\r\n\r\n");
+                    free(contentLengthString);
                     dc_close(env, err, errorFileDescriptor);
                 }
                 free(content);
@@ -460,7 +409,6 @@ int receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLen
             getData(env, err);
         } else if (strcmp(requestType, "PUT") == 0)
         {
-            responseCode = 1;
             char *body = strstr(data, "\r\n\r\n");
             if (body != NULL)
             {
@@ -481,7 +429,6 @@ int receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLen
         exit_flag = 1;
     }
     dc_free(env, data, size);
-    return responseCode;
 }
 
 void getData(struct dc_posix_env *env, struct dc_error *err)
@@ -515,7 +462,7 @@ void store_data(struct dc_posix_env *env, struct dc_error *err, char *majorMinor
     dc_dbm_close(env, err, db);
 }
 
-int getNumberOfDigits (int n) {
+unsigned long getNumberOfDigits (int n) {
     if (n < 0) return getNumberOfDigits ((n == INT_MIN) ? INT_MAX: -n);
     if (n < 10) return 1;
     return 1 + getNumberOfDigits (n / 10);
