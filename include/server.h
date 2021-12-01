@@ -38,14 +38,22 @@ void getData(struct dc_posix_env *env,
 int receive_data(struct dc_posix_env *env,
                  struct dc_error *err,
                  int *contentLength,
-                 int fd, size_t size);
+                 char **response,
+                 int fd,
+                 size_t size);
 
 void store_data(struct dc_posix_env *env,
                 struct dc_error *err,
                 char *majorMinor,
                 char *location);
 
-struct application_settings {
+int getNumberOfDigits (int n);
+
+
+
+
+
+        struct application_settings {
     struct dc_opt_settings opts;
     struct dc_setting_bool *verbose;
     struct dc_setting_string *hostname;
