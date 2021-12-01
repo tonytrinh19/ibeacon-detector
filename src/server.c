@@ -4,6 +4,7 @@
 #define INT_MAX 10000
 #define PATH_404 "../../404.html"
 #define PATH_INDEX "../../index.html"
+#define PATH_SAVED "../../saved.html"
 #define database "DB"
 #define ROOT "../.."
 int main(int argc, char *argv[])
@@ -263,7 +264,6 @@ bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socke
 
     app_settings      = arg;
     ret_val           = false;
-    int contentLength = 0;
     *client_socket_fd = dc_network_accept(env, err, app_settings->server_socket_fd);
 
 
@@ -276,7 +276,7 @@ bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socke
     } else
     {
         char response[BUFSIZ] = {0};
-        receive_data(env, err, &contentLength, response, *client_socket_fd, BUFSIZ);
+        receive_data(env, err, response, *client_socket_fd, BUFSIZ);
         // GET
         dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
         dc_close(env, err, *client_socket_fd);
@@ -310,7 +310,7 @@ trace(__attribute__ ((unused)) const struct dc_posix_env *env, const char *file_
 }
 
 // Look at the code in the client, you could do the same thing
-void receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLength, char *response, int fd, size_t size)
+void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response, int fd, size_t size)
 {
     // more efficient would be to allocate the buffer in the caller (main) so we don't have to keep
     // mallocing and freeing the same data over and over again.
@@ -383,6 +383,10 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLe
                 gpsLocation[strlen(gpsLocation)] = '\0';
 
                 store_data(env, err, majorMinor, gpsLocation);
+                if(dc_error_has_no_error(err))
+                {
+
+                }
             }
 
         }
@@ -432,15 +436,15 @@ unsigned long getNumberOfDigits (int n) {
 }
 
 void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response) {
+    ssize_t nread;
+    char *content;
+    char fileContent[BUFSIZ] = {0};
+    unsigned long numOfDigits;
     char headerError[]     = "HTTP/1.0 404 Not Found\r\n"
                              "Content-Type: text/html\r\n"
                              "Content-Length: ";
     char headerErrorRest[] = "\r\n"
                              "\r\n";
-    ssize_t nread;
-    char *content;
-    char fileContent[BUFSIZ] = {0};
-    unsigned long numOfDigits;
     char *contentLengthString;
     int errorFileDescriptor     = open(PATH_404, DC_O_RDONLY, 0);
     nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
@@ -463,16 +467,18 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
 }
 
 void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* response) {
-    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
-                             "Content-Type: text/html\r\n"
-                             "Content-Length: ";
-    char headerOKRest[]    = "\r\n"
-                             "\r\n";
     ssize_t nread;
     char *content;
     char fileContent[BUFSIZ] = {0};
     unsigned long numOfDigits;
     char *contentLengthString;
+
+    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
+                             "Content-Type: text/html\r\n"
+                             "Content-Length: ";
+    char headerOKRest[]    = "\r\n"
+                             "\r\n";
+
     nread                       = dc_read(env, err, fd, fileContent, BUFSIZ);
     content                     = malloc(nread * sizeof(char));
     strncpy(content, fileContent, nread);

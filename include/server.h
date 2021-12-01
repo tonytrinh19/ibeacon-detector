@@ -37,7 +37,6 @@ void getData(struct dc_posix_env *env,
 
 void receive_data(struct dc_posix_env *env,
                   struct dc_error *err,
-                  int *contentLength,
                   char *response,
                   int fd,
                   size_t size);
