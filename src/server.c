@@ -322,13 +322,9 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
         char *requestType;
         char *path;
         char *temp;
-        char fileContent[BUFSIZ] = {0};
         char *content = NULL;
-        ssize_t nread;
         char *filePath;
         int fileD;
-        unsigned long numOfDigits;
-        char *contentLengthString;
 
         temp = malloc((strlen(data) + 1) * sizeof(char));
         strcpy(temp, data);
