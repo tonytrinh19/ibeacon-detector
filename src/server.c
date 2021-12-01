@@ -277,7 +277,6 @@ bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socke
     {
         char response[BUFSIZ] = {0};
         receive_data(env, err, response, *client_socket_fd, BUFSIZ);
-        // GET
         dc_send(env, err, *client_socket_fd, response, dc_strlen(env, response), 0);
         dc_close(env, err, *client_socket_fd);
         exit_flag = 0;
@@ -362,20 +361,27 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
             // Ncurses
             else if (dc_strlen(env, path) == 1)
             {
-                fileD = open(PATH_INDEX, DC_O_RDONLY, 0);
-                openPagePath(env, err, fileD, response, INDEX);
+//                fileD = open(PATH_INDEX, DC_O_RDONLY, 0);
+//                openPagePath(env, err, fileD, response, INDEX);
+                char msgBody[BUFSIZ] = {0};
+                getData(env, err, msgBody);
+                char headerOK[]          = "HTTP/1.0 200 OK\r\n"
+                                           "Content-Type: text/plain\r\n"
+                                           "\r\n";
+                dc_strcat(env, response, headerOK);
+                dc_strcat(env, response, msgBody);
+
             }
-            getData(env, err);
         } else if (strcmp(requestType, "PUT") == 0)
         {
             char *body = dc_strstr(env, data, "\r\n\r\n");
             if (body != NULL)
             {
-                char *modBody = body + 4;
-                char *majorMinor = dc_strtok(env, modBody, " ");
+                char *modBody     = body + 4;
+                char *majorMinor  = dc_strtok(env, modBody, " ");
                 char *gpsLocation = dc_strtok(env, NULL, " ");
 
-                majorMinor[dc_strlen(env, majorMinor)] = '\0';
+                majorMinor[dc_strlen(env, majorMinor)]   = '\0';
                 gpsLocation[dc_strlen(env, gpsLocation)] = '\0';
 
                 store_data(env, err, majorMinor, gpsLocation);
@@ -395,16 +401,15 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
     dc_free(env, data, size);
 }
 
-void getData(struct dc_posix_env *env, struct dc_error *err)
+void getData(struct dc_posix_env *env, struct dc_error *err, char* messageBody)
 {
     DBM *db = dc_dbm_open(env, err, database, DC_O_RDWR | DC_O_CREAT, 0600);
     for (datum key = dc_dbm_firstkey(env, err, db); key.dptr != NULL; key = dc_dbm_nextkey(env, err, db))
     {
         datum data = dc_dbm_fetch(env, err, db, key);
-        dc_write(env, err, STDOUT_FILENO, data.dptr, (size_t) data.dsize - 1);
-        dc_write(env, err, STDOUT_FILENO, "\n", 1);
+        dc_strncat(env, messageBody, data.dptr, (size_t) (data.dsize - 1));
+        dc_strncat(env, messageBody, "\n", 1);
     }
-
     dc_dbm_close(env, err, db);
 }
 
@@ -445,11 +450,11 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
     char *contentLengthString;
     int errorFileDescriptor     = open(PATH_404, DC_O_RDONLY, 0);
     nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
-    content                     = malloc(nread * sizeof(char));
-    strncpy(content, fileContent, nread);
+    content                     = malloc((unsigned long) nread * sizeof(char));
+    strncpy(content, fileContent, (unsigned long) nread);
     content[dc_strlen(env, content)] = '\0';
 
-    numOfDigits   = getNumberOfDigits((int) nread);
+    numOfDigits           = getNumberOfDigits((int) nread);
     contentLengthString   = calloc(numOfDigits, sizeof(char));
 
     sprintf(contentLengthString, "%d", (int) nread);
@@ -482,8 +487,8 @@ void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* 
                                "\r\n";
 
     nread                    = dc_read(env, err, fd, fileContent, BUFSIZ);
-    content                  = malloc(nread * sizeof(char));
-    strncpy(content, fileContent, nread);
+    content                  = malloc((unsigned long) nread * sizeof(char));
+    strncpy(content, fileContent, (unsigned long) nread);
     content[dc_strlen(env, content)] = '\0';
 
     numOfDigits              = getNumberOfDigits((int) nread);

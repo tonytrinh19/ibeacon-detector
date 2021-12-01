@@ -37,10 +37,13 @@ static volatile sig_atomic_t exit_signal = 0;
  * CREATED for PUT request, CUSTOM for custom
  * GET request path.
  */
-enum file{INDEX, CREATED, CUSTOM};
+enum file {
+    INDEX, CREATED, CUSTOM
+};
 
 void getData(struct dc_posix_env *env,
-             struct dc_error *err);
+             struct dc_error *err,
+             char *messageBody);
 
 /**
  * Listens to the socket. Waiting for information

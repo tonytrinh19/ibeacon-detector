@@ -18,10 +18,10 @@ static volatile sig_atomic_t exit_flag;
 
 void error_reporter(const struct dc_error *err);
 
-void trace_reporter(const struct dc_posix_env *env,
-                    const char *file_name,
-                    const char *function_name,
-                    size_t line_number);
+void trace_reporter(__attribute__((unused)) const struct dc_posix_env *env,
+                           const char *file_name,
+                           const char *function_name,
+                           size_t line_number);
 
 void quit_handler(int sig_num);
 
