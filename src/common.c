@@ -6,7 +6,7 @@ void error_reporter(const struct dc_error *err) {
 }
 
 void trace_reporter(const struct dc_posix_env *env, const char *file_name,
-                           const char *function_name, size_t line_number) {
+                    const char *function_name, size_t line_number) {
     fprintf(stderr, "Entering: %s : %s @ %zu\n", file_name, function_name, line_number);
 }
 
