@@ -32,6 +32,8 @@
 
 static volatile sig_atomic_t exit_signal = 0;
 
+enum file{INDEX, CREATED, CUSTOM};
+
 void getData(struct dc_posix_env *env,
              struct dc_error *err);
 
@@ -66,7 +68,8 @@ void open404Page(struct dc_posix_env *env,
 void openPagePath(struct dc_posix_env *env,
                   struct dc_error *err,
                   int fd,
-                  char *response);
+                  char *response,
+                  enum file);
 
 struct dc_application_settings *create_settings(const struct dc_posix_env *env,
                                                 struct dc_error *err);

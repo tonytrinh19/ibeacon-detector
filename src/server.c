@@ -4,7 +4,7 @@
 #define INT_MAX 10000
 #define PATH_404 "../../404.html"
 #define PATH_INDEX "../../index.html"
-#define PATH_SAVED "../../saved.html"
+#define PATH_CREATED "../../saved.html"
 #define database "DB"
 #define ROOT "../.."
 int main(int argc, char *argv[])
@@ -354,7 +354,7 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
                 // Found a file.
                 if(fileD != -1)
                 {
-                    openPagePath(env, err, fileD, response);
+                    openPagePath(env, err, fileD, response, CUSTOM);
                 }
                 // Couldn't locate file, returns 404.
                 else
@@ -367,7 +367,8 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
             // Ncurses
             else if (strlen(path) == 1)
             {
-
+                fileD = open(PATH_INDEX, DC_O_RDONLY, 0);
+                openPagePath(env, err, fileD, response, INDEX);
             }
             getData(env, err);
         } else if (strcmp(requestType, "PUT") == 0)
@@ -385,7 +386,8 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
                 store_data(env, err, majorMinor, gpsLocation);
                 if(dc_error_has_no_error(err))
                 {
-
+                    fileD = open(PATH_CREATED, DC_O_RDONLY, 0);
+                    openPagePath(env, err, fileD, response, CREATED);
                 }
             }
 
@@ -466,18 +468,23 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
     dc_close(env, err, errorFileDescriptor);
 }
 
-void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* response) {
+void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* response, enum file type) {
     ssize_t nread;
     char *content;
     char fileContent[BUFSIZ] = {0};
     unsigned long numOfDigits;
     char *contentLengthString;
+    char headerCREATED[]     = "HTTP/1.0 201 Created\r\n"
+                               "Content-Type: text/html\r\n"
+                               "Content-Length: ";
+    char headerCREATEDRest[] = "\r\n"
+                               "\r\n";
 
-    char headerOK[]        = "HTTP/1.0 200 OK\r\n"
-                             "Content-Type: text/html\r\n"
-                             "Content-Length: ";
-    char headerOKRest[]    = "\r\n"
-                             "\r\n";
+    char headerOK[]          = "HTTP/1.0 200 OK\r\n"
+                               "Content-Type: text/html\r\n"
+                               "Content-Length: ";
+    char headerOKRest[]      = "\r\n"
+                               "\r\n";
 
     nread                       = dc_read(env, err, fd, fileContent, BUFSIZ);
     content                     = malloc(nread * sizeof(char));
@@ -487,10 +494,20 @@ void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* 
     numOfDigits   = getNumberOfDigits((int) nread);
     contentLengthString   = calloc(numOfDigits, sizeof(char));
     sprintf(contentLengthString, "%d", (int) nread);
+    
+    if(type == CREATED)
+    {
+        strcat(response, headerCREATED);
+        strcat(response, contentLengthString);
+        strcat(response, headerCREATEDRest);
+    }
+    else
+    {
+        strcat(response, headerOK);
+        strcat(response, contentLengthString);
+        strcat(response, headerOKRest);
+    }
 
-    strcat(response, headerOK);
-    strcat(response, contentLengthString);
-    strcat(response, headerOKRest);
     strcat(response, content);
     strcat(response, "\r\n\r\n");
 
