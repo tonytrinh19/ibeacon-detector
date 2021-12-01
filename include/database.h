@@ -14,8 +14,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-int store(const struct dc_posix_env *env, const struct dc_error *err, DBM *db, const char *name, const char *phone_number, int type);
-datum fetch(const struct dc_posix_env *env, const struct dc_error *err, DBM *db, const char *name);
-void display(const char *name, datum *content);
+int
+store(const struct dc_posix_env *env,
+      const struct dc_error *err, DBM *db,
+      const char *majorMinor,
+      const char *location,
+      int type);
+
+datum fetch(const struct dc_posix_env *env,
+            const struct dc_error *err, DBM *db,
+            const char *name);
+
+void display(const char *name,
+             datum *content);
 
 #endif //TEMPLATE2_DATABASE_H

@@ -5,109 +5,106 @@
 #ifndef TEMPLATE2_SERVER_H
 #define TEMPLATE2_SERVER_H
 
+#include <dc_application/command_line.h>
+#include <dc_application/config.h>
+#include <dc_application/options.h>
+#include <dc_posix/dc_netdb.h>
+#include <dc_posix/dc_posix_env.h>
+#include <dc_posix/dc_unistd.h>
+#include <dc_posix/dc_signal.h>
+#include <dc_posix/dc_string.h>
+#include <dc_posix/dc_stdlib.h>
+#include <dc_posix/sys/dc_socket.h>
+#include <dc_posix/dc_fcntl.h>
+#include <dc_posix/dc_ndbm.h>
+#include <dc_network/common.h>
+#include <dc_network/options.h>
+#include <dc_network/server.h>
+#include <dc_util/streams.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <getopt.h>
+#include <string.h>
+#include <malloc.h>
+#include "common.h"
+#include "database.h"
 
-void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size);
-void store_data(struct dc_posix_env *env, struct dc_error *err, char *data);
-unsigned long words(const char *sentence);
+static volatile sig_atomic_t exit_signal = 0;
 
-/* use this code later to parse the data line by line then word by word
- * int count_lines(const char *str) {
-    int lines = 0;
-    for (int i = 0; i < strlen(str); ++i) {
-        if (str[i] == '\n') {
-            lines++;
-        }
-    }
+void getData(struct dc_posix_env *env,
+             struct dc_error *err);
 
-    return lines;
-}
+int receive_data(struct dc_posix_env *env,
+                 struct dc_error *err,
+                 int *contentLength,
+                 int fd, size_t size);
 
-int main() {
-    char *template = "HTTP/1.1 200 OK\n"
-                     "Content-Encoding: gzip\n"
-                     "Accept-Ranges: bytes\n"
-                     "Age: 242818\n"
-                     "Cache-Control: max-age=604800\n"
-                     "Content-Type: text/html; charset=UTF-8\n"
-                     "Date: Sun, 14 Nov 2021 19:07:18 GMT\n"
-                     "Etag: \"3147526947\"\n"
-                     "Expires: Sun, 21 Nov 2021 19:07:18 GMT\n"
-                     "Last-Modified: Thu, 17 Oct 2019 07:18:26 GMT\n"
-                     "Server: ECS (sec/96ED)\n"
-                     "X-Cache: HIT\n"
-                     "Content-Length: 648\n"
-                     "\r\n";
+void store_data(struct dc_posix_env *env,
+                struct dc_error *err,
+                char *majorMinor,
+                char *location);
 
-    char *template2 = "HTTP/1.1 200 OK\n"
-                     "Content-Encoding: gzip\n"
-                      "\r\n";
+struct application_settings {
+    struct dc_opt_settings opts;
+    struct dc_setting_bool *verbose;
+    struct dc_setting_string *hostname;
+    struct dc_setting_regex *ip_version;
+    struct dc_setting_uint16 *port;
+    struct dc_setting_bool *reuse_address;
+    struct addrinfo *address;
+    int server_socket_fd;
+};
 
-    char *temp = malloc((strlen(template) + 1) * sizeof(char));
-    strcpy(temp, template);
-    temp[strlen(temp)] = '\0';
-    int lines = count_lines(temp);
-    char *token_array[lines];
+struct dc_application_settings *create_settings(const struct dc_posix_env *env,
+                                                struct dc_error *err);
 
-    char *rest = NULL;
-    char *token;
-    int index = 0;
+int
+destroy_settings(const struct dc_posix_env *env,
+                 struct dc_error *err,
+                 struct dc_application_settings **psettings);
 
-    for (token = strtok_r(temp, "\n", &rest);
-         token != NULL;
-         token = strtok_r(NULL, "\n", &rest)) {
+int run(const struct dc_posix_env *env,
+        struct dc_error *err,
+        struct dc_application_settings *settings);
 
-        char *token_ed = malloc((strlen(token) + 1) * sizeof(char));
-        strcpy(token_ed, token);
-        token_ed[strlen(token_ed)] = '\0';
+void signal_handler(int signnum);
 
-        if (token_ed[strlen(token_ed)] == '\0') {
-            token_array[index] = token_ed;
-            index++;
-        }
-    }
+void do_create_settings(const struct dc_posix_env *env,
+                        struct dc_error *err,
+                        void *arg);
 
+void do_create_socket(const struct dc_posix_env *env,
+                      struct dc_error *err,
+                      void *arg);
 
+void do_set_sockopts(const struct dc_posix_env *env,
+                     struct dc_error *err,
+                     void *arg);
 
-    for (int i = 0; i < lines; ++i) {
-        unsigned long wordsCount = words(token_array[i]);
-        char *aLine = calloc((strlen(token_array[i]) + 1),sizeof(char));
-        strcpy(aLine, token_array[i]);
-        aLine[strlen(aLine)] = '\0';
-        char *words_array[wordsCount];
-        char *rest2 = NULL;
-        int index2 = 0;
-        char *tok;
-        if (strcmp(aLine, "\r") == 0) {
-            printf("can stop now\n");
-            break;
-        } else {
-            for (tok = strtok_r(aLine, " ", &rest2);
-                 tok != NULL;
-                 tok = strtok_r(NULL, " ", &rest2)) {
-                char *token_ed2 = calloc((strlen(tok) + 1),sizeof(char));
-                strcpy(token_ed2, tok);
-                token_ed2[strlen(token_ed2)] = '\0';
-                if (token_ed2[strlen(token_ed2)] == '\0') {
-                    words_array[index2] = token_ed2;
-                    index2++;
-                }
-            }
+void do_bind(const struct dc_posix_env *env,
+             struct dc_error *err,
+             void *arg);
 
-            for (int j = 0; j < wordsCount; j++) {
-                printf("%s ", words_array[j]);
-            }
-            printf("\n");
-        }
-//        printf("Index2: %d\n", index2);
-//        printf("%s\n", token_array[i]);
-    }
+void do_listen(const struct dc_posix_env *env,
+               struct dc_error *err,
+               void *arg);
 
+void do_setup(const struct dc_posix_env *env,
+              struct dc_error *err,
+              void *arg);
 
+bool do_accept(struct dc_posix_env *env,
+               struct dc_error *err,
+               int *client_socket_fd,
+               void *arg);
 
+void do_shutdown(const struct dc_posix_env *env,
+                 struct dc_error *err,
+                 void *arg);
 
+void do_destroy_settings(const struct dc_posix_env *env,
+                         struct dc_error *err,
+                         void *arg);
 
-    return 0;
-}
- */
 #endif //TEMPLATE2_SERVER_H

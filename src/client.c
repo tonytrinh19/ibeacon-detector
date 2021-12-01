@@ -28,7 +28,7 @@ int main(void) {
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
 
-    host_name = "localhost";
+    host_name = "10.65.10.163";
     dc_memset(&env, &hints, 0, sizeof(hints));
     hints.ai_family = PF_INET; // PF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -47,7 +47,7 @@ int main(void) {
             socklen_t sockaddr_size;
 
             sockaddr = result->ai_addr;
-            port = 5555;
+            port = 1239;
             converted_port = htons(port);
 
             if (sockaddr->sa_family == AF_INET) {
@@ -80,6 +80,7 @@ int main(void) {
                     if (old_action.sa_handler != SIG_IGN) {
                         struct sigaction new_action;
                         char data[1024] = {0};
+                        ssize_t count;
 
                         exit_flag = 0;
                         new_action.sa_handler = quit_handler;
@@ -89,7 +90,7 @@ int main(void) {
 
                         while (dc_read(&env, &err, STDIN_FILENO, data, 1024) > 0 && dc_error_has_no_error(&err)) {
                             data[strlen(data)] = '\0';
-//                            printf("READ %s\n", data);
+//                            printf("%s", data);
                             dc_write(&env, &err, socket_fd, data, strlen(data) + 1);
                             receive_data(&env, &err, socket_fd, 1024);
                             memset(data, '\0', strlen(data) + 1);

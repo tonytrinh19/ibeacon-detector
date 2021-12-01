@@ -1,268 +1,493 @@
-#include <dc_posix/dc_netdb.h>
-#include <dc_posix/dc_posix_env.h>
-#include <dc_posix/dc_unistd.h>
-#include <dc_posix/dc_signal.h>
-#include <dc_posix/dc_string.h>
-#include <dc_posix/dc_stdlib.h>
-#include <dc_posix/sys/dc_socket.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <ncurses.h>
 #include "server.h"
-#include "common.h"
-#include "database.h"
-
-#define testdb "TESTDB"
-
-int main(void) {
+#define DEFAULT_ECHO_PORT 2007
+#define database "DB"
+#define ROOT "../.."
+int main(int argc, char *argv[])
+{
     dc_error_reporter reporter;
     dc_posix_tracer tracer;
-    struct dc_error err;
     struct dc_posix_env env;
-    const char *host_name;
-    struct addrinfo hints;
-    struct addrinfo *result;
+    struct dc_error err;
+    struct dc_application_info *info;
+    int ret_val;
+    struct sigaction sa;
 
     reporter = error_reporter;
-    tracer = trace_reporter;
-    tracer = NULL;
+    tracer   = trace_reporter;
+    tracer   = NULL;
     dc_error_init(&err, reporter);
     dc_posix_env_init(&env, tracer);
+    dc_memset(&env, &sa, 0, sizeof(sa));
+    sa.sa_handler = &signal_handler;
+    dc_sigaction(&env, &err, SIGINT, &sa, NULL);
+    dc_sigaction(&env, &err, SIGTERM, &sa, NULL);
 
-    host_name = "localhost";
-    dc_memset(&env, &hints, 0, sizeof(hints));
-    hints.ai_family = PF_INET; // PF_INET6;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_CANONNAME;
-    dc_getaddrinfo(&env, &err, host_name, NULL, &hints, &result);
+    info = dc_application_info_create(&env, &err, "HTTP Server Application");
+    ret_val = dc_application_run(&env, &err, info, create_settings, destroy_settings, run, dc_default_create_lifecycle,
+                                 dc_default_destroy_lifecycle,
+                                 "~/.dcecho.conf",
+                                 argc, argv);
+    dc_application_info_destroy(&env, &info);
+    dc_error_reset(&err);
 
-    if (dc_error_has_no_error(&err)) {
-        int server_socket_fd;
+    return ret_val;
+}
 
-        server_socket_fd = dc_socket(&env, &err, result->ai_family, result->ai_socktype, result->ai_protocol);
 
-        if (dc_error_has_no_error(&err)) {
-            struct sockaddr *sockaddr;
-            in_port_t port;
-            in_port_t converted_port;
-            socklen_t sockaddr_size;
+struct dc_application_settings *create_settings(const struct dc_posix_env *env, struct dc_error *err)
+{
+    static const bool default_verbose   = false;
+    static const char *default_hostname = "localhost";
+    static const char *default_ip       = "IPv4";
+    static const uint16_t default_port  = DEFAULT_ECHO_PORT;
+    static const bool default_reuse     = false;
+    struct application_settings *settings;
 
-            sockaddr = result->ai_addr;
-            port = 5555;
-            converted_port = htons(port);
+    settings = dc_malloc(env, err, sizeof(struct application_settings));
 
-            if (sockaddr->sa_family == AF_INET) {
-                struct sockaddr_in *addr_in;
+    if (settings == NULL)
+    {
+        return NULL;
+    }
 
-                addr_in = (struct sockaddr_in *) sockaddr;
-                addr_in->sin_port = converted_port;
-                sockaddr_size = sizeof(struct sockaddr_in);
-            } else {
-                if (sockaddr->sa_family == AF_INET6) {
-                    struct sockaddr_in6 *addr_in;
+    settings->opts.parent.config_path = dc_setting_path_create(env, err);
+    settings->verbose = dc_setting_bool_create(env, err);
+    settings->hostname = dc_setting_string_create(env, err);
+    settings->ip_version = dc_setting_regex_create(env, err, "^IPv[4|6]");
+    settings->port = dc_setting_uint16_create(env, err);
+    settings->reuse_address = dc_setting_bool_create(env, err);
 
-                    addr_in = (struct sockaddr_in6 *) sockaddr;
-                    addr_in->sin6_port = converted_port;
-                    sockaddr_size = sizeof(struct sockaddr_in6);
-                } else {
-                    DC_ERROR_RAISE_USER(&err, "sockaddr->sa_family is invalid", -1);
-                    sockaddr_size = 0;
-                }
-            }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+    struct options opts[] =
+            {
+                    {(struct dc_setting *) settings->opts.parent.config_path, dc_options_set_path,   "config",  required_argument, 'c', "CONFIG",        dc_string_from_string, NULL,            dc_string_from_config, NULL},
+                    {(struct dc_setting *) settings->verbose,                 dc_options_set_bool,   "verbose", no_argument,       'v', "VERBOSE",       dc_flag_from_string,   "verbose",       dc_flag_from_config,   &default_verbose},
+                    {(struct dc_setting *) settings->hostname,                dc_options_set_string, "host",    required_argument, 'h', "HOST",          dc_string_from_string, "host",          dc_string_from_config, default_hostname},
+                    {(struct dc_setting *) settings->ip_version,              dc_options_set_regex,  "ip",      required_argument, 'i', "IP",            dc_string_from_string, "ip",            dc_string_from_config, default_ip},
+                    {(struct dc_setting *) settings->port,                    dc_options_set_uint16, "port",    required_argument, 'p', "PORT",          dc_uint16_from_string, "port",          dc_uint16_from_config, &default_port},
+                    {(struct dc_setting *) settings->reuse_address,           dc_options_set_bool,   "force",   no_argument,       'f', "REUSE_ADDRESS", dc_flag_from_string,   "reuse_address", dc_flag_from_config,   &default_reuse},
+            };
+#pragma GCC diagnostic pop
 
-            if (dc_error_has_no_error(&err)) {
-                dc_bind(&env, &err, server_socket_fd, sockaddr, sockaddr_size);
+    // note the trick here - we use calloc and add 1 to ensure the last line is all 0/NULL
+    settings->opts.opts = dc_calloc(env, err, (sizeof(opts) / sizeof(struct options)) + 1, sizeof(struct options));
+    dc_memcpy(env, settings->opts.opts, opts, sizeof(opts));
+    settings->opts.flags = "c:vh:i:p:f";
+    settings->opts.env_prefix = "DC_HTTP_";
 
-                if (dc_error_has_no_error(&err)) {
-                    int backlog;
+    return (struct dc_application_settings *) settings;
+}
 
-                    backlog = 5;
-                    dc_listen(&env, &err, server_socket_fd, backlog);
+int destroy_settings(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err,
+                     struct dc_application_settings **psettings)
+{
+    struct application_settings *app_settings;
 
-                    if (dc_error_has_no_error(&err)) {
-                        struct sigaction old_action;
+    app_settings = (struct application_settings *) *psettings;
+    dc_setting_bool_destroy(env, &app_settings->verbose);
+    dc_setting_string_destroy(env, &app_settings->hostname);
+    dc_setting_uint16_destroy(env, &app_settings->port);
+    dc_free(env, app_settings->opts.opts, app_settings->opts.opts_size);
+    dc_free(env, app_settings, sizeof(struct application_settings));
 
-                        dc_sigaction(&env, &err, SIGINT, NULL, &old_action);
+    if (env->null_free)
+    {
+        *psettings = NULL;
+    }
 
-                        if (old_action.sa_handler != SIG_IGN) {
-                            struct sigaction new_action;
+    return 0;
+}
 
-                            exit_flag = 0;
-                            new_action.sa_handler = quit_handler;
-                            sigemptyset(&new_action.sa_mask);
-                            new_action.sa_flags = 0;
-                            dc_sigaction(&env, &err, SIGINT, &new_action, NULL);
-                            while (!(exit_flag) && dc_error_has_no_error(&err)) {
-                                int client_socket_fd;
 
-                                client_socket_fd = dc_accept(&env, &err, server_socket_fd, NULL, NULL);
+static struct dc_server_lifecycle *create_server_lifecycle(const struct dc_posix_env *env, struct dc_error *err)
+{
+    struct dc_server_lifecycle *lifecycle;
 
-                                if (dc_error_has_no_error(&err)) {
-                                    receive_data(&env, &err, client_socket_fd, 1024);
-                                    dc_close(&env, &err, client_socket_fd);
-                                } else {
-                                    if (err.type == DC_ERROR_ERRNO && err.errno_code == EINTR) {
-                                        dc_error_reset(&err);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    lifecycle = dc_server_lifecycle_create(env, err);
+    dc_server_lifecycle_set_create_settings(env, lifecycle, do_create_settings);
+    dc_server_lifecycle_set_create_socket(env, lifecycle, do_create_socket);
+    dc_server_lifecycle_set_set_sockopts(env, lifecycle, do_set_sockopts);
+    dc_server_lifecycle_set_bind(env, lifecycle, do_bind);
+    dc_server_lifecycle_set_listen(env, lifecycle, do_listen);
+    dc_server_lifecycle_set_setup(env, lifecycle, do_setup);
+    dc_server_lifecycle_set_accept(env, lifecycle, do_accept);
+    dc_server_lifecycle_set_shutdown(env, lifecycle, do_shutdown);
+    dc_server_lifecycle_set_destroy_settings(env, lifecycle, do_destroy_settings);
 
-        if (dc_error_has_no_error(&err)) {
-            dc_close(&env, &err, server_socket_fd);
+    return lifecycle;
+}
+
+static void destroy_server_lifecycle(const struct dc_posix_env *env, struct dc_server_lifecycle **plifecycle)
+{
+    DC_TRACE(env);
+    dc_server_lifecycle_destroy(env, plifecycle);
+}
+
+
+int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err,
+        struct dc_application_settings *settings)
+{
+    int ret_val;
+    struct dc_server_info *info;
+
+    info = dc_server_info_create(env, err, "HTTP Server Application", NULL, settings);
+
+    if (dc_error_has_no_error(err)) {
+        dc_server_run(env, err, info, create_server_lifecycle, destroy_server_lifecycle);
+        dc_server_info_destroy(env, &info);
+    }
+
+    if (dc_error_has_no_error(err)) {
+        ret_val = 0;
+    } else {
+        ret_val = -1;
+    }
+
+    return ret_val;
+}
+
+
+void signal_handler(__attribute__ ((unused)) int signnum)
+{
+    printf("caught\n");
+    exit_signal = 1;
+}
+
+void do_create_settings(const struct dc_posix_env *env, struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+    const char *ip_version;
+    int family;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    ip_version = dc_setting_regex_get(env, app_settings->ip_version);
+
+    if (dc_strcmp(env, ip_version, "IPv4") == 0)
+    {
+        family = PF_INET;
+    } else
+    {
+        if (dc_strcmp(env, ip_version, "IPv6") == 0)
+        {
+            family = PF_INET6;
+        } else
+        {
+            DC_ERROR_RAISE_USER(err, "Invalid ip_version", -1);
+            family = 0;
         }
     }
 
-    return EXIT_SUCCESS;
+    if (dc_error_has_no_error(err))
+    {
+        const char *hostname;
+
+        hostname = dc_setting_string_get(env, app_settings->hostname);
+        dc_network_get_addresses(env, err, family, SOCK_STREAM, hostname, &app_settings->address);
+    }
+}
+
+void do_create_socket(const struct dc_posix_env *env, struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+    int socket_fd;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    socket_fd = dc_network_create_socket(env, err, app_settings->address);
+
+    if (dc_error_has_no_error(err))
+    {
+        app_settings = arg;
+        app_settings->server_socket_fd = socket_fd;
+    } else
+    {
+        socket_fd = -1;
+    }
+}
+
+void do_set_sockopts(const struct dc_posix_env *env, struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+    bool reuse_address;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    reuse_address = dc_setting_bool_get(env, app_settings->reuse_address);
+    dc_network_opt_ip_so_reuse_addr(env, err, app_settings->server_socket_fd, reuse_address);
+}
+
+void do_bind(const struct dc_posix_env *env, struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+    uint16_t port;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    port = dc_setting_uint16_get(env, app_settings->port);
+
+    dc_network_bind(env,
+                    err,
+                    app_settings->server_socket_fd,
+                    app_settings->address->ai_addr,
+                    port);
+}
+
+void do_listen(const struct dc_posix_env *env, struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+    int backlog;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    backlog = 5;
+    dc_network_listen(env, err, app_settings->server_socket_fd, backlog);
+}
+
+void do_setup(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err,
+              __attribute__ ((unused)) void *arg)
+{
+    DC_TRACE(env);
+}
+
+bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socket_fd, void *arg)
+{
+    char getResponse[] = "HTTP/1.0 200 OK\r\n"
+                         "Date: Monday, 24-Apr-95 12:04:12 GMT\r\n"
+                         "Content-type: text/html\r\n"
+                         "\r\n"
+                         "<!Doctype html>"
+                         "<html>"
+                         "<head>"
+                         "<title>GET request</title>"
+                         "</head>"
+                         "<body>"
+                         "<div>"
+                         "<h1>GET request</h1>"
+                         "</div>"
+                         "</body>"
+                         "</html>\r\n\r\n";
+
+    char putResponse[] = "HTTP/1.0 200 OK\r\n"
+                         "Date: Monday, 24-Apr-95 12:04:12 GMT\r\n"
+                         "Content-type: text/html\r\n"
+                         "\r\n"
+                         "<!Doctype html>"
+                         "<html>"
+                         "<head>"
+                         "<title>PUT request</title>"
+                         "</head>"
+                         "<body>"
+                         "<div>"
+                         "<h1>PUT request</h1>"
+                         "</div>"
+                         "</body>"
+                         "</html>\r\n\r\n";
+
+    char errorResponse[] = "HTTP/1.0 200 OK\r\n"
+                           "Content-type: text/html\r\n"
+                           "\r\n"
+                           "<!Doctype html>"
+                           "<html>"
+                           "<head>"
+                           "<title>404 PAGE</title>"
+                           "</head>"
+                           "<body>"
+                           "<div>"
+                           "<h1>Sorry, page not found!</h1>"
+                           "</div>"
+                           "</body>"
+                           "</html>\r\n\r\n";
+
+    struct application_settings *app_settings;
+    bool ret_val;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    ret_val = false;
+    int contentLength = 0;
+    *client_socket_fd = dc_network_accept(env, err, app_settings->server_socket_fd);
+
+    if (dc_error_has_error(err))
+    {
+        if (exit_signal == true && dc_error_is_errno(err, EINTR))
+        {
+            ret_val = true;
+        }
+    } else
+    {
+        // change codes.
+
+        int responseCode = receive_data(env, err, &contentLength, *client_socket_fd, BUFSIZ);
+        // GET
+        if (responseCode == 0)
+        {
+            dc_send(env, err, *client_socket_fd, getResponse, strlen(getResponse), 0);
+        }
+            // PUT
+        else if (responseCode == 1)
+        {
+            dc_send(env, err, *client_socket_fd, putResponse, strlen(putResponse), 0);
+        } else
+        {
+            dc_send(env, err, *client_socket_fd, errorResponse, strlen(errorResponse), 0);
+        }
+        dc_close(env, err, *client_socket_fd);
+        exit_flag = 0;
+    }
+
+    return ret_val;
+}
+
+void do_shutdown(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err,
+                 __attribute__ ((unused)) void *arg)
+{
+    DC_TRACE(env);
+}
+
+void
+do_destroy_settings(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err, void *arg)
+{
+    struct application_settings *app_settings;
+
+    DC_TRACE(env);
+    app_settings = arg;
+    dc_freeaddrinfo(env, app_settings->address);
+}
+
+__attribute__ ((unused)) static void
+trace(__attribute__ ((unused)) const struct dc_posix_env *env, const char *file_name, const char *function_name,
+      size_t line_number)
+{
+    fprintf(stdout, "TRACE: %s : %s : @ %zu\n", file_name, function_name, line_number);
 }
 
 // Look at the code in the client, you could do the same thing
-void receive_data(struct dc_posix_env *env, struct dc_error *err, int fd, size_t size) {
+int receive_data(struct dc_posix_env *env, struct dc_error *err, int *contentLength, int fd, size_t size)
+{
     // more efficient would be to allocate the buffer in the caller (main) so we don't have to keep
     // mallocing and freeing the same data over and over again.
     char *data;
     ssize_t count;
+    int responseCode = -1;
 
     data = dc_malloc(env, err, size);
 
-    while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err)) {
-
+    while (!(exit_flag) && (count = dc_read(env, err, fd, data, size)) > 0 && dc_error_has_no_error(err))
+    {
         char *temp = malloc((strlen(data) + 1) * sizeof(char));
+        int reqType = -1;
         strcpy(temp, data);
-        // should remove the -1
         temp[strlen(temp)] = '\0';
-        unsigned long num_of_tokens = words(data);
-
-        char *token_array[num_of_tokens];
-
         dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
-        char *rest = NULL;
-        char *token;
-        int index = 0;
+        char *requestType;
+        char *path;
+        requestType = strtok(temp, " ");
+        path = strtok(NULL, " ");
+        ssize_t nread;
+        char fileContent[BUFSIZ] = {0};
+        char *content;
 
-
-        //tokenize
-        for (token = strtok_r(temp, " ", &rest);
-             token != NULL;
-             token = strtok_r(NULL, " ", &rest)) {
-            char *token_ed = malloc((strlen(token) + 1) * sizeof(char));
-            strcpy(token_ed, token);
-            token_ed[strlen(token_ed)] = '\0';
-
-            if (token_ed[strlen(token_ed)] == '\0') {
-                token_array[index] = token_ed;
-                index++;
+        if (dc_strcmp(env, requestType, "GET") == 0)
+        {
+            // Web browser, looks for file
+            if (strlen(path) > 1)
+            {
+                // Allocates memory for the file path, strlen of path + 2 for ".."(ROOT)
+                char *filePath = calloc((strlen(path) + 2),sizeof(char));
+                strcat(filePath, ROOT);
+                strcat(filePath, path);
+                filePath[strlen(filePath)] = '\0';
+                printf("\nFile Path:%s\n", filePath);
+                int fileD = open(filePath, DC_O_RDONLY, 0);
+                printf("\nFD:%d\n", fileD);
+                if(fileD != -1)
+                {
+                    responseCode = 0;
+                    nread = dc_read(env, err, fileD, fileContent, BUFSIZ);
+                    content = malloc(nread * sizeof(char));
+                    strncpy(content, fileContent, nread);
+                    content[strlen(content)] = '\0';
+                    *contentLength = (int) nread;
+                    printf("Content-Length:%zu\n%s\n", nread, content);
+                    dc_close(env, err, fileD);
+                }
+                else
+                {
+                    char errorPath[] = "../../404.html";
+                    int errorFileDescriptor = open(errorPath, DC_O_RDONLY, 0);
+                    responseCode = -1;
+                    nread = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
+                    content = malloc(nread * sizeof(char));
+                    strncpy(content, fileContent, nread);
+                    content[strlen(content)] = '\0';
+                    *contentLength = (int) nread;
+                    printf("\n%s\n", content);
+                    dc_close(env, err, errorFileDescriptor);
+                }
+                free(content);
+                free(filePath);
             }
-        }
+            // Ncurses
+            else if (strlen(path) == 1)
+            {
 
-
-//        char *temp = malloc(strlen(data) * sizeof(char));
-//        strcpy(temp, data);
-//        temp[strlen(temp) - 1] = '\0';
-//
-//        int num_of_tokens = words(data);
-//        char *token_array[num_of_tokens];
-//
-//        char *ret_ptr;
-//        char *next_ptr;
-//        int i = 0;
-//        ret_ptr = strtok_r(temp, " ", &next_ptr);
-//        while(ret_ptr) {
-//            token_array[i] = ret_ptr;
-//            ret_ptr = strtok_r(NULL, " ", &next_ptr);
-//            i++;
-//        }
-
-
-//        for (int i = 0; i < num_of_tokens; i++) {
-//            printf("Token: [%s]\n", token_array[i]);
-//        }
-//        free(temp);
-//        printf("token_array[0] = %s\n", token_array[0]);
-//
-
-        // Checks if the request is PUT
-        if (strcmp(token_array[0], "put") == 0) {
-            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-
-            store(env, err, db, token_array[1], token_array[2], DBM_REPLACE);
-            printf("Saving item (%s, %s)\n", token_array[1], token_array[2]);
-            dc_write(env, err, fd, "Saved in DB successfully\n", 25);
-            dc_dbm_close(env, err, db);
-        }
-
-
-        // Checks if the request is GET
-        else if (strcmp(token_array[0], "get") == 0) {
-            DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-            datum content = fetch(env, err, db, (char *)token_array[1]);
-            if (content.dsize <= 0) {
-                printf("Not in db\n");
-                dc_write(env, err, fd, "This is not in DB\n", 18);
-                memset(data, '\0', strlen(data) + 1);
             }
-            else {
-//                initscr();			/* Start curses mode 		  */
-//                printw("%s\n", (char *)content.dptr);	/* Print Hello World		  */
-//                refresh();			/* Print it on to the real screen */
-//                getch();			/* Wait for user input */
-//                endwin();			/* End curses mode		  */
+            getData(env, err);
+        } else if (strcmp(requestType, "PUT") == 0)
+        {
+            responseCode = 1;
+            char *body = strstr(data, "\r\n\r\n");
+            if (body != NULL)
+            {
+                char *modBody = body + 4;
+                char *majorMinor = strtok(modBody, " ");
+                char *gpsLocation = strtok(NULL, " ");
 
-                dc_write(env, err, fd, (char*)content.dptr, strlen((char*)content.dptr));
-                dc_write(env, err, fd, "\n", 1);
-                dc_write(env, err, STDOUT_FILENO, (char*)content.dptr, strlen((char*)content.dptr));
-                dc_write(env, err, STDOUT_FILENO, "\n", 1);
+                majorMinor[strlen(majorMinor)] = '\0';
+                gpsLocation[strlen(gpsLocation)] = '\0';
+
+                store_data(env, err, majorMinor, gpsLocation);
             }
-            dc_dbm_close(env, err, db);
+
         }
 
-        for (int i = 0; i < num_of_tokens; ++i) {
-            printf("%s\n", token_array[i]);
-        }
         memset(data, '\0', strlen(data) + 1);
+        free(temp);
+        exit_flag = 1;
     }
     dc_free(env, data, size);
+    return responseCode;
 }
 
-void store_data(struct dc_posix_env *env, struct dc_error *err, char *data) {
-    DBM *db = dc_dbm_open(env, err, testdb, DC_O_RDWR | DC_O_CREAT, 0600);
-    if (dc_error_has_no_error(err)) {
-
-        store(env, err, db, data, "value bro bro", DBM_REPLACE);
-
-        if (dc_error_has_error(err)) {
-            if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR) {
-                dc_error_reset(err);
-            }
-        } else {
-            datum content;
-            content = fetch(env, err, db, data);
-            //content = fetch(&env, &err, db, "Foo");
-            display(data, &content);
-        }
+void getData(struct dc_posix_env *env, struct dc_error *err)
+{
+    DBM *db = dc_dbm_open(env, err, database, DC_O_RDWR | DC_O_CREAT, 0600);
+    for (datum key = dc_dbm_firstkey(env, err, db); key.dptr != NULL; key = dc_dbm_nextkey(env, err, db))
+    {
+        datum data = dc_dbm_fetch(env, err, db, key);
+        dc_write(env, err, STDOUT_FILENO, data.dptr, (size_t) data.dsize - 1);
+        dc_write(env, err, STDOUT_FILENO, "\n", 1);
     }
+
     dc_dbm_close(env, err, db);
 }
 
+void store_data(struct dc_posix_env *env, struct dc_error *err, char *majorMinor, char *location)
+{
+    DBM *db = dc_dbm_open(env, err, database, DC_O_RDWR | DC_O_CREAT, 0600);
+    if (dc_error_has_no_error(err))
+    {
+        store(env, err, db, majorMinor, location, DBM_REPLACE);
 
-
-unsigned long words(const char *sentence) {
-    unsigned long len, i, count = 0;
-    char lastC;
-    len = strlen(sentence);
-    if (len > 0) {
-        lastC = sentence[0];
-    }
-    for (i = 0; i <= len; i++) {
-        if ((sentence[i] == ' ' || sentence[i] == '\0') && lastC != ' ') {
-            count++;
+        if (dc_error_has_error(err))
+        {
+            if (err->type == DC_ERROR_ERRNO && err->errno_code == EINTR)
+            {
+                dc_error_reset(err);
+            }
         }
-        lastC = sentence[i];
     }
-    return count;
+    dc_dbm_close(env, err, db);
 }
