@@ -12,7 +12,6 @@
 #include "client.h"
 
 
-
 int main(void) {
     dc_error_reporter reporter;
     dc_posix_tracer tracer;
