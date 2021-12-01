@@ -278,7 +278,7 @@ bool do_accept(struct dc_posix_env *env, struct dc_error *err, int *client_socke
         char response[BUFSIZ] = {0};
         receive_data(env, err, response, *client_socket_fd, BUFSIZ);
         // GET
-        dc_send(env, err, *client_socket_fd, response, strlen(response), 0);
+        dc_send(env, err, *client_socket_fd, response, dc_strlen(env, response), 0);
         dc_close(env, err, *client_socket_fd);
         exit_flag = 0;
     }
@@ -326,27 +326,26 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
         char *filePath;
         int fileD;
 
-        temp = malloc((strlen(data) + 1) * sizeof(char));
+        temp = malloc((dc_strlen(env, data) + 1) * sizeof(char));
         strcpy(temp, data);
-        temp[strlen(temp)] = '\0';
-        dc_write(env, err, STDOUT_FILENO, temp, strlen(temp));
+        temp[dc_strlen(env, temp)] = '\0';
+        dc_write(env, err, STDOUT_FILENO, temp, dc_strlen(env, temp));
 
-        requestType = strtok(temp, " ");
-        path        = strtok(NULL, " ");
+        requestType = dc_strtok(env, temp, " ");
+        path        = dc_strtok(env, NULL, " ");
 
 
         if (dc_strcmp(env, requestType, "GET") == 0)
         {
             // Web browser, looks for file
-            if (strlen(path) > 1)
+            if (dc_strlen(env, path) > 1)
             {
-                // Allocates memory for the path, strlen of path + 2 for ".."(ROOT)
-                filePath = calloc((strlen(path) + 2),sizeof(char));
-                strcat(filePath, ROOT);
-                strcat(filePath, path);
-                filePath[strlen(filePath)] = '\0';
+                // Allocates memory for the path, dc_strlen env, of path + 2 for ".."(ROOT)
+                filePath = calloc((dc_strlen(env, path) + 2),sizeof(char));
+                dc_strcat(env, filePath, ROOT);
+                dc_strcat(env, filePath, path);
+                filePath[dc_strlen(env, filePath)] = '\0';
                 fileD = open(filePath, DC_O_RDONLY, 0);
-                printf("\nFD:%d\n", fileD);
                 // Found a file.
                 if(fileD != -1)
                 {
@@ -361,7 +360,7 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
                 free(filePath);
             }
             // Ncurses
-            else if (strlen(path) == 1)
+            else if (dc_strlen(env, path) == 1)
             {
                 fileD = open(PATH_INDEX, DC_O_RDONLY, 0);
                 openPagePath(env, err, fileD, response, INDEX);
@@ -369,15 +368,15 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
             getData(env, err);
         } else if (strcmp(requestType, "PUT") == 0)
         {
-            char *body = strstr(data, "\r\n\r\n");
+            char *body = dc_strstr(env, data, "\r\n\r\n");
             if (body != NULL)
             {
                 char *modBody = body + 4;
-                char *majorMinor = strtok(modBody, " ");
-                char *gpsLocation = strtok(NULL, " ");
+                char *majorMinor = dc_strtok(env, modBody, " ");
+                char *gpsLocation = dc_strtok(env, NULL, " ");
 
-                majorMinor[strlen(majorMinor)] = '\0';
-                gpsLocation[strlen(gpsLocation)] = '\0';
+                majorMinor[dc_strlen(env, majorMinor)] = '\0';
+                gpsLocation[dc_strlen(env, gpsLocation)] = '\0';
 
                 store_data(env, err, majorMinor, gpsLocation);
                 if(dc_error_has_no_error(err))
@@ -389,7 +388,7 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
 
         }
 
-        memset(data, '\0', strlen(data) + 1);
+        memset(data, '\0', dc_strlen(env, data) + 1);
         free(temp);
         exit_flag = 1;
     }
@@ -448,18 +447,18 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
     nread                       = dc_read(env, err, errorFileDescriptor, fileContent, BUFSIZ);
     content                     = malloc(nread * sizeof(char));
     strncpy(content, fileContent, nread);
-    content[strlen(content)] = '\0';
+    content[dc_strlen(env, content)] = '\0';
 
     numOfDigits   = getNumberOfDigits((int) nread);
     contentLengthString   = calloc(numOfDigits, sizeof(char));
 
     sprintf(contentLengthString, "%d", (int) nread);
 
-    strcat(response, headerError);
-    strcat(response, contentLengthString);
-    strcat(response, headerErrorRest);
-    strcat(response, content);
-    strcat(response, "\r\n\r\n");
+    dc_strcat(env, response, headerError);
+    dc_strcat(env, response, contentLengthString);
+    dc_strcat(env, response, headerErrorRest);
+    dc_strcat(env, response, content);
+    dc_strcat(env, response, "\r\n\r\n");
     free(contentLengthString);
     dc_close(env, err, errorFileDescriptor);
 }
@@ -482,30 +481,30 @@ void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* 
     char headerOKRest[]      = "\r\n"
                                "\r\n";
 
-    nread                       = dc_read(env, err, fd, fileContent, BUFSIZ);
-    content                     = malloc(nread * sizeof(char));
+    nread                    = dc_read(env, err, fd, fileContent, BUFSIZ);
+    content                  = malloc(nread * sizeof(char));
     strncpy(content, fileContent, nread);
-    content[strlen(content)] = '\0';
+    content[dc_strlen(env, content)] = '\0';
 
-    numOfDigits   = getNumberOfDigits((int) nread);
-    contentLengthString   = calloc(numOfDigits, sizeof(char));
+    numOfDigits              = getNumberOfDigits((int) nread);
+    contentLengthString      = calloc(numOfDigits, sizeof(char));
     sprintf(contentLengthString, "%d", (int) nread);
     
     if(type == CREATED)
     {
-        strcat(response, headerCREATED);
-        strcat(response, contentLengthString);
-        strcat(response, headerCREATEDRest);
+        dc_strcat(env, response, headerCREATED);
+        dc_strcat(env, response, contentLengthString);
+        dc_strcat(env, response, headerCREATEDRest);
     }
     else
     {
-        strcat(response, headerOK);
-        strcat(response, contentLengthString);
-        strcat(response, headerOKRest);
+        dc_strcat(env, response, headerOK);
+        dc_strcat(env, response, contentLengthString);
+        dc_strcat(env, response, headerOKRest);
     }
 
-    strcat(response, content);
-    strcat(response, "\r\n\r\n");
+    dc_strcat(env, response, content);
+    dc_strcat(env, response, "\r\n\r\n");
 
     free(contentLengthString);
     dc_close(env, err, fd);

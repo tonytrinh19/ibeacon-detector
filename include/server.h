@@ -32,6 +32,9 @@
 
 static volatile sig_atomic_t exit_signal = 0;
 
+/*
+ * Different file types,
+ */
 enum file{INDEX, CREATED, CUSTOM};
 
 void getData(struct dc_posix_env *env,
