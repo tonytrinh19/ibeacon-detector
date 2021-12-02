@@ -339,8 +339,8 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
             // Web browser, looks for file
             if (dc_strlen(env, path) > 1)
             {
-                // Allocates memory for the path, dc_strlen env, of path + 2 for ".."(ROOT)
-                filePath = calloc((dc_strlen(env, path) + 2),sizeof(char));
+                // Allocates memory for the path, dc_strlen env, of path + 2 for "../.."(ROOT)
+                filePath = calloc((dc_strlen(env, path) + 5),sizeof(char));
                 dc_strcat(env, filePath, ROOT);
                 dc_strcat(env, filePath, path);
                 filePath[dc_strlen(env, filePath)] = '\0';
