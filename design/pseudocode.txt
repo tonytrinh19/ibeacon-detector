@@ -1,0 +1,41 @@
+// The Server Side
+
+// Listen for connection, if there's a connection, accept that and save the client_fd
+
+// Listens for data coming from the client, the incoming data should be requests.
+while(connected_to_socket) do:
+{
+    receive_data() do:
+    {
+         // parse incoming request
+            char *reqType = strtok(data)
+            // Checks whether it's a GET or PUT
+            if (reqType == "GET") do:
+            {
+                // Checks the path, url
+                if (path == "/") do:
+                    display(index.html)
+                else do:
+                    // looks for file in the directory that matches the name, if can't find it display 404 file
+                    if (found file in directory) do:
+                        display(file.html) // Response code: 200 OK
+                    else do:
+                        display(404.html) // Response code: 404 Not Found
+            }
+            else if (reqType == "PUT") do:
+            {
+                // Checks for message body for key, value pair.
+                store(key, value, database)
+                if (stored successful) do:
+                    display(created.html) // Response code: 201 Created
+                else do:
+                    display(404.html) // Response code: 404 Not Found
+            }
+    }
+
+    write(response, client_fd)
+    close(client_fd)
+}
+
+
+// The Client Side

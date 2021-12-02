@@ -11,7 +11,7 @@ ENDIF ()
 
 # Make an executable
 add_executable(server ${COMMON_SOURCE_LIST}  ${SERVER_SOURCE_LIST} ${SERVER_MAIN_SOURCE} ${HEADER_LIST} ../include/database.h database.c ../include/server.h)
-add_executable(client ${COMMON_SOURCE_LIST}  ${CLIENT_SOURCE_LIST} ${CLIENT_MAIN_SOURCE} ${HEADER_LIST} ../include/client.h ../include/client.h)
+add_executable(client ${COMMON_SOURCE_LIST}  ${CLIENT_SOURCE_LIST} ${CLIENT_MAIN_SOURCE} ${HEADER_LIST} ../include/client.h)
 
 # We need this directory, and users of our library will need it too
 target_include_directories(server PRIVATE ../include)
