@@ -361,8 +361,6 @@ void receive_data(struct dc_posix_env *env, struct dc_error *err, char *response
             // Ncurses
             else if (dc_strlen(env, path) == 1)
             {
-//                fileD = open(PATH_INDEX, DC_O_RDONLY, 0);
-//                openPagePath(env, err, fileD, response, INDEX);
                 char msgBody[BUFSIZ] = {0};
                 getData(env, err, msgBody);
                 char headerOK[]          = "HTTP/1.0 200 OK\r\n"
@@ -407,6 +405,8 @@ void getData(struct dc_posix_env *env, struct dc_error *err, char* messageBody)
     for (datum key = dc_dbm_firstkey(env, err, db); key.dptr != NULL; key = dc_dbm_nextkey(env, err, db))
     {
         datum data = dc_dbm_fetch(env, err, db, key);
+        dc_strncat(env, messageBody, key.dptr, (size_t) (key.dsize) - 1);
+        dc_strncat(env, messageBody, " ", 1);
         dc_strncat(env, messageBody, data.dptr, (size_t) (data.dsize - 1));
         dc_strncat(env, messageBody, "\n", 1);
     }
@@ -454,8 +454,8 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
     strncpy(content, fileContent, (unsigned long) nread);
     content[dc_strlen(env, content)] = '\0';
 
-    numOfDigits           = getNumberOfDigits((int) nread);
-    contentLengthString   = calloc(numOfDigits, sizeof(char));
+    numOfDigits                 = getNumberOfDigits((int) nread);
+    contentLengthString         = calloc(numOfDigits, sizeof(char));
 
     sprintf(contentLengthString, "%d", (int) nread);
 
@@ -463,7 +463,6 @@ void open404Page(struct dc_posix_env *env, struct dc_error *err, char* response)
     dc_strcat(env, response, contentLengthString);
     dc_strcat(env, response, headerErrorRest);
     dc_strcat(env, response, content);
-    dc_strcat(env, response, "\r\n\r\n");
     free(contentLengthString);
     dc_close(env, err, errorFileDescriptor);
 }
@@ -509,7 +508,6 @@ void openPagePath(struct dc_posix_env *env, struct dc_error *err, int fd, char* 
     }
 
     dc_strcat(env, response, content);
-    dc_strcat(env, response, "\r\n\r\n");
 
     free(contentLengthString);
     dc_close(env, err, fd);

@@ -208,11 +208,9 @@ int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error
     initscr();
     dc_write(env, err, sock_fd, message, message_length);
     char *buf = dc_malloc(env, err, BUFSIZ);
-    ssize_t nread;
-    int responseCode = -1;
     // display data
     dc_read(env, err, sock_fd, buf, BUFSIZ);
-    printw("(major,minor longitude,latitude,city)");
+    printw("(major,minor time:longitude,latitude)");
     printw("\n%s", buf);
     refresh();
     getch();

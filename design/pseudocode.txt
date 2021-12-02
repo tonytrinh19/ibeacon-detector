@@ -39,3 +39,11 @@ while(connected_to_socket) do:
 
 
 // The Client Side
+
+// Connects to the host:port socket.
+initializes ncurses screen
+sends GET request to the server
+listens for response from server
+prints out the message body of the response from server, which is all the data in the database
+close the ncurses window
+close the socket
